@@ -7,13 +7,13 @@ import com.example.smartteachingplatform.course.mapper.CourseMapper;
 import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
 import com.example.smartteachingplatform.course.service.CourseService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -74,32 +74,33 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     @Transactional
-    public Map<String, Object> joinByInviteCode(Long userId, Long courseId, String inviteCode) {
-        Course course = courseMapper.findByInviteCode(inviteCode);
-        if (course == null || !course.getId().equals(courseId)) {
-            throw new BusinessException(400, "邀请码无效或课程不匹配");
+    public Map<String, Object> joinByInviteCode(Long userId, String inviteCode) {
+        String code = inviteCode == null ? "": inviteCode.trim().toUpperCase();
+
+        Course course = courseMapper.findByInviteCode(code);
+        if (course == null) {
+            throw new BusinessException(404, "邀请码无效或课程不存在");
         }
 
-        CourseMember existing = courseMemberMapper.findByCourseIdAndUserId(courseId, userId);
+        CourseMember existing = courseMemberMapper.findByCourseIdAndUserId(course.getId(), userId);
         if (existing != null) {
-            throw new BusinessException(400, "你已加入该课程");
+            throw new BusinessException(409, "你已加入该课程");
         }
 
         CourseMember member = new CourseMember();
-        member.setCourseId(courseId);
+        member.setCourseId(course.getId());
         member.setUserId(userId);
         member.setMemberRole("student");
 
-        try {
-            courseMemberMapper.insert(member);
-        } catch (DuplicateKeyException e) {
-            throw new BusinessException(400, "你已加入该课程");
-        }
+        courseMemberMapper.upsert(member);
 
-        return Map.of(
-                "courseId", courseId,
-                "joinedAt", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        );
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("courseId", course.getId());
+        result.put("name", course.getCourseName());
+        result.put("semester", course.getSemester());
+        result.put("role", "STUDENT");
+        result.put("joinedAt", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        return result;
     }
 
     @Override
