@@ -17,7 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
+import java.util.LinkedHashMap;
 @Service
 @RequiredArgsConstructor
 public class CourseServiceImpl implements CourseService {
@@ -60,15 +60,20 @@ public class CourseServiceImpl implements CourseService {
         List<Course> courses = courseMapper.findMyCourses(userId);
 
         return courses.stream()
-                .map(c -> Map.<String, Object>of(
-                        "courseId", c.getId(),
-                        "name", c.getCourseName(),
-                        "semester", c.getSemester(),
-                        "role", c.getRole().toUpperCase(),
-                        "memberCount", c.getMemberCount() != null ? c.getMemberCount() : 0,
-                        "studentCount", c.getStudentCount() != null ? c.getStudentCount() : 0,
-                        "nodeCount", c.getNodeCount() != null ? c.getNodeCount() : 0
-                ))
+                .map(c -> {
+                    String role = c.getRole() != null ? c.getRole().toUpperCase() : null;
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("courseId", c.getId());
+                    m.put("name", c.getCourseName());
+                    m.put("semester", c.getSemester() != null ? c.getSemester() : "");
+                    m.put("role", role);
+                    m.put("studentCount", c.getStudentCount() != null ? c.getStudentCount() : 0);
+                    m.put("nodeCount", c.getNodeCount() != null ? c.getNodeCount() : 0);
+                    if ("TEACHER".equals(role)) {
+                        m.put("inviteCode", c.getInviteCode());
+                    }
+                    return m;
+                })
                 .collect(Collectors.toList());
     }
 
