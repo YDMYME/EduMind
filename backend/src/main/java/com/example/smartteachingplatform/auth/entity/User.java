@@ -17,6 +17,7 @@ public class User {
     private String email;
     private String phone;
     private String avatarUrl;
+    private Boolean mustChangePassword;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

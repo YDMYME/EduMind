@@ -32,4 +32,8 @@ public interface UserMapper {
     @Insert("INSERT INTO user_roles (user_id, role_id) " +
             "SELECT #{userId}, id FROM roles WHERE role_code = #{roleCode}")
     int insertUserRole(Long userId, String roleCode);
+
+    @Update("UPDATE users SET password_hash = #{passwordHash}, must_change_password = false, updated_at = NOW() " +
+            "WHERE id = #{userId}")
+    int updatePassword(@Param("userId") Long userId, @Param("passwordHash") String passwordHash);
 }
