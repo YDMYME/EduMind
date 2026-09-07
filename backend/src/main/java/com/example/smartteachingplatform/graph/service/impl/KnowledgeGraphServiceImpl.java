@@ -11,7 +11,8 @@ import com.example.smartteachingplatform.graph.mapper.KnowledgeNodeMapper;
 import com.example.smartteachingplatform.graph.service.KnowledgeGraphService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import com.example.smartteachingplatform.graph.dto.NodeRequest;
+import com.example.smartteachingplatform.course.mapper.CourseMapper;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,6 +23,7 @@ public class KnowledgeGraphServiceImpl implements KnowledgeGraphService {
     private final KnowledgeNodeMapper knowledgeNodeMapper;
     private final KnowledgeEdgeMapper knowledgeEdgeMapper;
     private final CourseMemberMapper courseMemberMapper;
+    private final CourseMapper courseMapper;
 
     @Override
     public Map<String, Object> getGraph(Long courseId, Long userId, String userRole, String viewRole) {
@@ -67,6 +69,82 @@ public class KnowledgeGraphServiceImpl implements KnowledgeGraphService {
         List<KnowledgeEdge> edges = knowledgeEdgeMapper.findByCourseId(courseId);
 
         return buildGraphResponse(courseId, nodes, edges, false);
+    }
+
+    @Override
+    public Map<String, Object> createNode(Long courseId, Long teacherId, NodeRequest request) {
+        assertCourseTeacher(courseId, teacherId);
+
+        if (request.getNodeCode() == null || request.getNodeCode().isBlank()) {
+            throw new BusinessException(400, "nodeCode 不能为空");
+        }
+        if (request.getName() == null || request.getName().isBlank()) {
+            throw new BusinessException(400, "name 不能为空");
+        }
+        if (knowledgeNodeMapper.findByCode(courseId, request.getNodeCode()) != null) {
+            throw new BusinessException(409, "节点编码已存在");
+        }
+        Long parentId = resolveParentId(courseId, request.getParentCode());
+
+        KnowledgeNode node = new KnowledgeNode();
+        node.setCourseId(courseId);
+        node.setNodeCode(request.getNodeCode());
+        node.setNodeName(request.getName());
+        node.setNodeDesc(request.getDescription());
+        node.setDifficulty(request.getDifficulty() != null ? request.getDifficulty() : 1);
+        node.setParentId(parentId);
+        node.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0);
+        node.setStatus("active");
+        knowledgeNodeMapper.insert(node);
+
+        return Map.of("nodeId", node.getId());
+    }
+
+    @Override
+    public Map<String, Object> updateNode(Long nodeId, Long teacherId, NodeRequest request) {
+        KnowledgeNode node = knowledgeNodeMapper.findById(nodeId);
+        if (node == null) {
+            throw new BusinessException(404, "节点不存在");
+        }
+        assertCourseTeacher(node.getCourseId(), teacherId);
+
+        if (request.getName() == null || request.getName().isBlank()) {
+            throw new BusinessException(400, "name 不能为空");
+        }
+        if (request.getNodeCode() != null && !request.getNodeCode().isBlank()) {
+            KnowledgeNode exist = knowledgeNodeMapper.findByCode(node.getCourseId(), request.getNodeCode());
+            if (exist != null && !exist.getId().equals(nodeId)) {
+                throw new BusinessException(409, "节点编码已存在");
+            }
+        }
+        Long parentId = resolveParentId(node.getCourseId(), request.getParentCode());
+
+        node.setNodeCode(request.getNodeCode() != null ? request.getNodeCode() : node.getNodeCode());
+        node.setNodeName(request.getName());
+        node.setNodeDesc(request.getDescription());
+        if (request.getDifficulty() != null) node.setDifficulty(request.getDifficulty());
+        node.setParentId(parentId);
+        if (request.getSortOrder() != null) node.setSortOrder(request.getSortOrder());
+        knowledgeNodeMapper.updateNode(node);
+
+        return Map.of("nodeId", nodeId);
+    }
+
+    private Long resolveParentId(Long courseId, String parentCode) {
+        if (parentCode == null || parentCode.isBlank()) {
+            return null;
+        }
+        KnowledgeNode parent = knowledgeNodeMapper.findByCode(courseId, parentCode);
+        if (parent == null) {
+            throw new BusinessException(400, "父节点不存在");
+        }
+        return parent.getId();
+    }
+
+    private void assertCourseTeacher(Long courseId, Long teacherId) {
+        Long ownerId = courseMapper.findTeacherIdByCourseId(courseId);
+        if (ownerId == null) throw new BusinessException(404, "课程不存在");
+        if (!ownerId.equals(teacherId)) throw new BusinessException(403, "仅本课程教师可操作");
     }
 
     private Map<String, Object> buildGraphResponse(Long courseId, List<KnowledgeNode> nodes,

@@ -124,4 +124,9 @@ public interface KnowledgeNodeMapper {
 
     @Select("SELECT COUNT(*) FROM knowledge_nodes WHERE course_id = #{courseId} AND status = 'active'")
     int countByCourseId(@Param("courseId") Long courseId);
+
+    @Update("UPDATE knowledge_nodes SET node_code = #{nodeCode}, node_name = #{nodeName}, " +
+            "node_desc = #{nodeDesc}, difficulty = #{difficulty}, parent_id = #{parentId}, " +
+            "sort_order = #{sortOrder}, updated_at = NOW() WHERE id = #{id}")
+    int updateNode(KnowledgeNode node);
 }

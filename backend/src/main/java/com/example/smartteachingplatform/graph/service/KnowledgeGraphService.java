@@ -1,5 +1,7 @@
 package com.example.smartteachingplatform.graph.service;
 
+import com.example.smartteachingplatform.graph.dto.NodeRequest;
+
 import java.util.Map;
 
 public interface KnowledgeGraphService {
@@ -11,4 +13,8 @@ public interface KnowledgeGraphService {
     Map<String, Object> getNodeStudents(Long courseId, Long nodeId);
 
     Map<String, Object> queryNodes(Long courseId, Long userId, int page, int pageSize);
+
+    Map<String, Object> createNode(Long courseId, Long teacherId, NodeRequest request);
+
+    Map<String, Object> updateNode(Long nodeId, Long teacherId, NodeRequest request);
 }

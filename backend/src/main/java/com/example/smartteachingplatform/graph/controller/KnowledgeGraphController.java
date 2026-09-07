@@ -2,6 +2,7 @@ package com.example.smartteachingplatform.graph.controller;
 
 import com.example.smartteachingplatform.common.response.Result;
 import com.example.smartteachingplatform.common.util.SecurityUtils;
+import com.example.smartteachingplatform.graph.dto.NodeRequest;
 import com.example.smartteachingplatform.graph.service.KnowledgeGraphService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -47,5 +48,13 @@ public class KnowledgeGraphController {
                                                 @RequestParam(defaultValue = "100") int pageSize) {
         return Result.success(knowledgeGraphService.queryNodes(
                 courseId, SecurityUtils.getUserId(), page, pageSize));
+    }
+
+    @PostMapping("/{courseId}/nodes")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> createNode(@PathVariable Long courseId,
+                                                  @RequestBody NodeRequest request) {
+        return Result.success(knowledgeGraphService.createNode(
+                courseId, SecurityUtils.getUserId(), request));
     }
 }
