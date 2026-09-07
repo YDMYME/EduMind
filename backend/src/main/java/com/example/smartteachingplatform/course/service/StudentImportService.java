@@ -1,5 +1,6 @@
 package com.example.smartteachingplatform.course.service;
 
+import com.example.smartteachingplatform.course.dto.PasswordResetResponse;
 import com.example.smartteachingplatform.course.dto.StudentImportCommitResponse;
 import com.example.smartteachingplatform.course.dto.StudentImportPreviewResponse;
 import org.springframework.web.multipart.MultipartFile;
@@ -49,4 +50,16 @@ public interface StudentImportService {
      * @return xlsx 文件字节
      */
     byte[] buildCredentialExport(String token, Long teacherId);
+
+    /**
+     * 重置学生密码（RANDOM），返回账号凭证下载令牌。
+     *
+     * @param courseId     课程 ID
+     * @param teacherId    当前登录教师 ID
+     * @param studentId    学生用户 ID
+     * @param passwordMode 密码模式（仅支持 RANDOM）
+     * @return 凭证下载令牌
+     */
+    PasswordResetResponse resetPassword(Long courseId, Long teacherId,
+                                        Long studentId, String passwordMode);
 }

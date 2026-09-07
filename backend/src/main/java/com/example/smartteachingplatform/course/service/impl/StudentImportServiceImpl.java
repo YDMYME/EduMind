@@ -4,6 +4,7 @@ import com.alibaba.excel.EasyExcel;
 import com.example.smartteachingplatform.auth.entity.User;
 import com.example.smartteachingplatform.auth.mapper.UserMapper;
 import com.example.smartteachingplatform.common.exception.BusinessException;
+import com.example.smartteachingplatform.course.dto.PasswordResetResponse;
 import com.example.smartteachingplatform.course.dto.StudentImportCommitResponse;
 import com.example.smartteachingplatform.course.dto.StudentImportPreviewResponse;
 import com.example.smartteachingplatform.course.entity.CourseMember;
@@ -320,6 +321,47 @@ public class StudentImportServiceImpl implements StudentImportService {
         credentialExportStore.remove(token);
 
         return out.toByteArray();
+    }
+
+    @Override
+    public PasswordResetResponse resetPassword(Long courseId, Long teacherId,
+                                               Long studentId, String passwordMode) {
+        assertCourseTeacher(courseId, teacherId);
+
+        if (!"RANDOM".equals(passwordMode)) {
+            throw new BusinessException(400, "passwordMode 仅支持 RANDOM");
+        }
+
+        CourseMember member = courseMemberMapper.findByCourseIdAndUserId(courseId, studentId);
+        if (member == null || !"student".equals(member.getMemberRole())) {
+            throw new BusinessException(404, "学生不在本课程中");
+        }
+
+        User student = userMapper.findById(studentId);
+        if (student == null) {
+            throw new BusinessException(404, "学生不存在");
+        }
+
+        String newPassword = randomPassword();
+        userMapper.resetPassword(studentId, passwordEncoder.encode(newPassword));
+
+        CredentialRow cr = new CredentialRow();
+        cr.setStudentNo(student.getUserNo());
+        cr.setRealName(student.getRealName());
+        cr.setUsername(student.getUsername());
+        cr.setInitialPassword(newPassword);
+
+        String credToken = "cred_" + UUID.randomUUID().toString().replace("-", "");
+        CredentialExport export = new CredentialExport();
+        export.setToken(credToken);
+        export.setTeacherId(teacherId);
+        export.setRows(Collections.singletonList(cr));
+        export.setCreatedAt(LocalDateTime.now());
+        credentialExportStore.put(credToken, export);
+
+        PasswordResetResponse resp = new PasswordResetResponse();
+        resp.setCredentialExportToken(credToken);
+        return resp;
     }
 
     private String randomPassword() {
