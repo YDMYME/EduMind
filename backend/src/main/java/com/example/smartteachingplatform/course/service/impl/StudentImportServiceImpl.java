@@ -1,16 +1,24 @@
 package com.example.smartteachingplatform.course.service.impl;
 
 import com.alibaba.excel.EasyExcel;
+import com.example.smartteachingplatform.auth.entity.User;
+import com.example.smartteachingplatform.auth.mapper.UserMapper;
 import com.example.smartteachingplatform.common.exception.BusinessException;
+import com.example.smartteachingplatform.course.dto.StudentImportCommitResponse;
 import com.example.smartteachingplatform.course.dto.StudentImportPreviewResponse;
+import com.example.smartteachingplatform.course.entity.CourseMember;
 import com.example.smartteachingplatform.course.mapper.CourseMapper;
+import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
 import com.example.smartteachingplatform.course.service.StudentImportService;
+import com.example.smartteachingplatform.course.service.impl.CredentialExportStore.CredentialExport;
+import com.example.smartteachingplatform.course.service.impl.CredentialExportStore.CredentialRow;
 import com.example.smartteachingplatform.course.service.impl.StudentImportSessionStore.ImportSession;
 import com.example.smartteachingplatform.course.service.impl.StudentImportSessionStore.ImportedRow;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,6 +28,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,8 +56,16 @@ public class StudentImportServiceImpl implements StudentImportService {
     private static final Pattern PHONE_PATTERN =
             Pattern.compile("^1\\d{10}$");
 
+    private static final String PASSWORD_CHARS =
+            "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    private static final int PASSWORD_LENGTH = 8;
+
     private final CourseMapper courseMapper;
+    private final CourseMemberMapper courseMemberMapper;
+    private final UserMapper userMapper;
+    private final PasswordEncoder passwordEncoder;
     private final StudentImportSessionStore sessionStore;
+    private final CredentialExportStore credentialExportStore;
 
     @Override
     public byte[] buildTemplate(Long courseId, Long teacherId) {
@@ -183,6 +200,135 @@ public class StudentImportServiceImpl implements StudentImportService {
 
         resp.setImportToken(token);
         return resp;
+    }
+
+    @Override
+    public StudentImportCommitResponse commit(Long courseId, Long teacherId,
+                                              String importToken, String duplicatePolicy) {
+        assertCourseTeacher(courseId, teacherId);
+        if (!"SKIP".equals(duplicatePolicy)) {
+            throw new BusinessException(400, "duplicatePolicy 仅支持 SKIP");
+        }
+
+        ImportSession session = sessionStore.get(importToken);
+        if (session == null) {
+            throw new BusinessException(400, "importToken 无效或已过期");
+        }
+        if (!session.getCourseId().equals(courseId)) {
+            throw new BusinessException(400, "importToken 与课程不匹配");
+        }
+
+        StudentImportCommitResponse resp = new StudentImportCommitResponse();
+        List<StudentImportCommitResponse.FailedRow> failedRows = new ArrayList<>();
+        List<CredentialRow> credentialRows = new ArrayList<>();
+        int created = 0;
+        int skipped = 0;
+
+        for (ImportedRow r : session.getRows()) {
+            try {
+                if (userMapper.findByUserNo(r.getStudentNo()) != null) {
+                    skipped++;
+                    continue;
+                }
+                if (!r.getEmail().isEmpty() && userMapper.findByEmail(r.getEmail()) != null) {
+                    skipped++;
+                    continue;
+                }
+
+                String username = r.getEmail().isEmpty()
+                        ? r.getStudentNo()
+                        : r.getEmail().split("@")[0];
+                String initialPassword = "RANDOM".equals(session.getPasswordMode())
+                        ? randomPassword()
+                        : session.getDefaultPassword();
+
+                User user = new User();
+                user.setUsername(username);
+                user.setUserNo(r.getStudentNo());
+                user.setRealName(r.getRealName());
+                user.setEmail(r.getEmail().isEmpty() ? null : r.getEmail());
+                user.setPhone(r.getPhone().isEmpty() ? null : r.getPhone());
+                user.setPasswordHash(passwordEncoder.encode(initialPassword));
+                userMapper.insertImportedStudent(user);
+                userMapper.insertUserRole(user.getId(), "student");
+
+                CourseMember member = new CourseMember();
+                member.setCourseId(courseId);
+                member.setUserId(user.getId());
+                member.setMemberRole("student");
+                courseMemberMapper.insert(member);
+
+                created++;
+
+                CredentialRow cr = new CredentialRow();
+                cr.setStudentNo(r.getStudentNo());
+                cr.setRealName(r.getRealName());
+                cr.setUsername(username);
+                cr.setInitialPassword(initialPassword);
+                credentialRows.add(cr);
+            } catch (Exception e) {
+                StudentImportCommitResponse.FailedRow fr = new StudentImportCommitResponse.FailedRow();
+                fr.setRow(r.getRow());
+                fr.setStudentNo(r.getStudentNo());
+                fr.setReason("创建失败：" + e.getMessage());
+                failedRows.add(fr);
+            }
+        }
+
+        String credToken = "cred_" + UUID.randomUUID().toString().replace("-", "");
+        CredentialExport export = new CredentialExport();
+        export.setToken(credToken);
+        export.setTeacherId(teacherId);
+        export.setRows(credentialRows);
+        export.setCreatedAt(LocalDateTime.now());
+        credentialExportStore.put(credToken, export);
+
+        sessionStore.remove(importToken);
+
+        resp.setCreated(created);
+        resp.setJoined(created);
+        resp.setSkipped(skipped);
+        resp.setFailedRows(failedRows);
+        resp.setCredentialExportToken(credToken);
+        return resp;
+    }
+
+    @Override
+    public byte[] buildCredentialExport(String token, Long teacherId) {
+        CredentialExport export = credentialExportStore.get(token);
+        if (export == null) {
+            throw new BusinessException(404, "凭证不存在或已过期");
+        }
+        if (!export.getTeacherId().equals(teacherId)) {
+            throw new BusinessException(403, "仅凭证生成者可下载");
+        }
+
+        List<List<String>> head = Arrays.asList(
+                Collections.singletonList("studentNo"),
+                Collections.singletonList("realName"),
+                Collections.singletonList("username"),
+                Collections.singletonList("initialPassword"));
+
+        List<List<String>> data = export.getRows().stream()
+                .map(r -> Arrays.asList(r.getStudentNo(), r.getRealName(),
+                        r.getUsername(), r.getInitialPassword()))
+                .collect(Collectors.toList());
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        EasyExcel.write(out).head(head).sheet("账号凭证").doWrite(data);
+
+        credentialExportStore.remove(token);
+
+        return out.toByteArray();
+    }
+
+    private String randomPassword() {
+        SecureRandom rnd = new SecureRandom();
+        StringBuilder sb = new StringBuilder(PASSWORD_LENGTH);
+        for (int i = 0; i < PASSWORD_LENGTH; i++) {
+            sb.append(PASSWORD_CHARS.charAt(rnd.nextInt(PASSWORD_CHARS.length())));
+        }
+        return sb.toString();
     }
 
     private List<Map<String, String>> parseExcel(MultipartFile file) throws IOException {

@@ -1,5 +1,6 @@
 package com.example.smartteachingplatform.course.service;
 
+import com.example.smartteachingplatform.course.dto.StudentImportCommitResponse;
 import com.example.smartteachingplatform.course.dto.StudentImportPreviewResponse;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,4 +28,25 @@ public interface StudentImportService {
     StudentImportPreviewResponse preview(Long courseId, Long teacherId,
                                          MultipartFile file,
                                          String passwordMode, String defaultPassword);
+
+    /**
+     * 确认导入：按 importToken 批量创建学生账号并加入课程。
+     *
+     * @param courseId        课程 ID
+     * @param teacherId       当前登录教师 ID
+     * @param importToken     预览阶段返回的令牌
+     * @param duplicatePolicy 重复处理策略（仅支持 SKIP）
+     * @return 导入结果（含账号凭证下载令牌）
+     */
+    StudentImportCommitResponse commit(Long courseId, Long teacherId,
+                                       String importToken, String duplicatePolicy);
+
+    /**
+     * 下载账号凭证（一次性），返回 xlsx 字节。
+     *
+     * @param token     凭证令牌
+     * @param teacherId 当前登录教师 ID
+     * @return xlsx 文件字节
+     */
+    byte[] buildCredentialExport(String token, Long teacherId);
 }

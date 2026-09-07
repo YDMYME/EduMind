@@ -24,10 +24,18 @@ public interface UserMapper {
     })
     User findByEmail(String email);
 
-    @Insert("INSERT INTO users (username, password_hash, real_name, email, status, created_at, updated_at) " +
-            "VALUES (#{username}, #{passwordHash}, #{realName}, #{email}, 'active', NOW(), NOW())")
+    @Select("SELECT * FROM users WHERE user_no = #{userNo}")
+    User findByUserNo(String userNo);
+
+    @Insert("INSERT INTO users (username, password_hash, real_name, email, phone, user_no, status, created_at, updated_at) " +
+            "VALUES (#{username}, #{passwordHash}, #{realName}, #{email}, #{phone}, #{userNo}, 'active', NOW(), NOW())")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(User user);
+
+    @Insert("INSERT INTO users (username, password_hash, real_name, email, phone, user_no, must_change_password, status, created_at, updated_at) " +
+            "VALUES (#{username}, #{passwordHash}, #{realName}, #{email}, #{phone}, #{userNo}, true, 'active', NOW(), NOW())")
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insertImportedStudent(User user);
 
     @Insert("INSERT INTO user_roles (user_id, role_id) " +
             "SELECT #{userId}, id FROM roles WHERE role_code = #{roleCode}")

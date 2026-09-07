@@ -1,6 +1,7 @@
 package com.example.smartteachingplatform.course.controller;
 import com.example.smartteachingplatform.common.response.Result;
 import com.example.smartteachingplatform.common.util.SecurityUtils;
+import com.example.smartteachingplatform.course.dto.StudentImportCommitResponse;
 import com.example.smartteachingplatform.course.dto.StudentImportPreviewResponse;
 import com.example.smartteachingplatform.course.service.StudentImportService;
 import lombok.RequiredArgsConstructor;
@@ -11,10 +12,13 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/courses/{courseId}/student-imports")
@@ -41,5 +45,15 @@ public class StudentImportController {
             @RequestParam(value = "defaultPassword", required = false) String defaultPassword) {
         return Result.success(studentImportService.preview(
                 courseId, SecurityUtils.getUserId(), file, passwordMode, defaultPassword));
+    }
+
+    @PostMapping("/{importToken}/commit")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<StudentImportCommitResponse> commit(
+            @PathVariable Long courseId,
+            @PathVariable String importToken,
+            @RequestBody Map<String, String> body) {
+        return Result.success(studentImportService.commit(
+                courseId, SecurityUtils.getUserId(), importToken, body.get("duplicatePolicy")));
     }
 }

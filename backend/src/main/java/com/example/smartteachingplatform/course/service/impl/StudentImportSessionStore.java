@@ -22,6 +22,10 @@ public class StudentImportSessionStore {
         sessions.put(token, session);
     }
 
+    public void remove(String token) {
+        sessions.remove(token);
+    }
+
     /** 惰性过期：超时返回 null 并删除。 */
     public ImportSession get(String token) {
         ImportSession s = sessions.get(token);
