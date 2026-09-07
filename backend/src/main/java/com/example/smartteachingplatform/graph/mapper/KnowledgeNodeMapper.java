@@ -1,5 +1,6 @@
 package com.example.smartteachingplatform.graph.mapper;
 
+import com.example.smartteachingplatform.graph.dto.NodeQueryResponse;
 import com.example.smartteachingplatform.graph.entity.KnowledgeNode;
 import org.apache.ibatis.annotations.*;
 
@@ -97,4 +98,30 @@ public interface KnowledgeNodeMapper {
 
     @Update("UPDATE knowledge_nodes SET parent_id = #{parentId}, updated_at = NOW() WHERE id = #{id}")
     int updateParent(@Param("id") Long id, @Param("parentId") Long parentId);
+
+    @Select("SELECT kn.id AS node_id, kn.node_code, kn.node_name AS name, kn.node_desc AS description, " +
+            "kn.difficulty, kn.parent_id, parent.node_code AS parent_code, " +
+            "kn.sort_order AS sort_order, kn.status " +
+            "FROM knowledge_nodes kn " +
+            "LEFT JOIN knowledge_nodes parent ON kn.parent_id = parent.id " +
+            "WHERE kn.course_id = #{courseId} AND kn.status = 'active' " +
+            "ORDER BY kn.sort_order " +
+            "LIMIT #{limit} OFFSET #{offset}")
+    @Results({
+            @Result(column = "node_id", property = "nodeId"),
+            @Result(column = "node_code", property = "nodeCode"),
+            @Result(column = "name", property = "name"),
+            @Result(column = "description", property = "description"),
+            @Result(column = "difficulty", property = "difficulty"),
+            @Result(column = "parent_id", property = "parentId"),
+            @Result(column = "parent_code", property = "parentCode"),
+            @Result(column = "sort_order", property = "sortOrder"),
+            @Result(column = "status", property = "status")
+    })
+    List<NodeQueryResponse> findNodesByCourseId(@Param("courseId") Long courseId,
+                                                @Param("offset") int offset,
+                                                @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM knowledge_nodes WHERE course_id = #{courseId} AND status = 'active'")
+    int countByCourseId(@Param("courseId") Long courseId);
 }
