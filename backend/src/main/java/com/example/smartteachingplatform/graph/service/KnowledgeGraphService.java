@@ -17,4 +17,6 @@ public interface KnowledgeGraphService {
     Map<String, Object> createNode(Long courseId, Long teacherId, NodeRequest request);
 
     Map<String, Object> updateNode(Long nodeId, Long teacherId, NodeRequest request);
+
+    void deleteNode(Long nodeId, Long teacherId);
 }

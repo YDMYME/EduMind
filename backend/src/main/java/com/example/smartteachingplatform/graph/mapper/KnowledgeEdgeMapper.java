@@ -30,4 +30,8 @@ public interface KnowledgeEdgeMapper {
     /** 按课程ID删除所有边（供种子数据幂等清理） */
     @Delete("DELETE FROM knowledge_edges WHERE course_id = #{courseId}")
     int deleteByCourseId(@Param("courseId") Long courseId);
+
+
+    @Delete("DELETE FROM knowledge_edges WHERE source_node_id = #{nodeId} OR target_node_id = #{nodeId}")
+    int deleteEdgesByNodeId(@Param("nodeId") Long nodeId);
 }

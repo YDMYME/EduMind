@@ -24,4 +24,11 @@ public class NodeController {
         return Result.success(knowledgeGraphService.updateNode(
                 nodeId, SecurityUtils.getUserId(), request));
     }
+
+    @DeleteMapping("/{nodeId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Void> deleteNode(@PathVariable Long nodeId) {
+        knowledgeGraphService.deleteNode(nodeId, SecurityUtils.getUserId());
+        return Result.success();
+    }
 }

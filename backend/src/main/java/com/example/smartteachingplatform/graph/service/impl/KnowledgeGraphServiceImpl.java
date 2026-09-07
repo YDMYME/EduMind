@@ -130,6 +130,86 @@ public class KnowledgeGraphServiceImpl implements KnowledgeGraphService {
         return Map.of("nodeId", nodeId);
     }
 
+    @Override
+    public Map<String, Object> getNodeStudents(Long courseId, Long nodeId) {
+        KnowledgeNode node = knowledgeNodeMapper.findById(nodeId);
+        List<Map<String, Object>> rows = knowledgeNodeMapper.findStudentsByNodeId(courseId, nodeId);
+
+        double totalScore = 0;
+        List<Map<String, Object>> students = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            Number scoreNum = (Number) row.get("mastery_score");
+            double score = scoreNum != null ? scoreNum.doubleValue() : 0.0;
+            totalScore += score;
+
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("studentId", row.get("student_id"));
+            s.put("studentName", row.get("student_name"));
+            s.put("masteryScore", Math.round(score));
+            s.put("masteryLevel", computeLevel((int) Math.round(score)));
+            students.add(s);
+        }
+
+        int count = students.size();
+        int avgScore = count > 0 ? (int) Math.round(totalScore / count) : 0;
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("nodeId", nodeId);
+        result.put("nodeName", node != null ? node.getNodeName() : "");
+        result.put("classAvgScore", avgScore);
+        result.put("classAvgLevel", computeLevel(avgScore));
+        result.put("totalStudents", count);
+        result.put("students", students);
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> queryNodes(Long courseId, Long userId, int page, int pageSize) {
+        CourseMember member = courseMemberMapper.findByCourseIdAndUserId(courseId, userId);
+        if (member == null) {
+            throw new BusinessException(403, "你不是该课程的成员");
+        }
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 100;
+
+        int total = knowledgeNodeMapper.countByCourseId(courseId);
+        int offset = (page - 1) * pageSize;
+        List<NodeQueryResponse> items = knowledgeNodeMapper.findNodesByCourseId(courseId, offset, pageSize);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("items", items);
+        result.put("total", total);
+        result.put("page", page);
+        result.put("pageSize", pageSize);
+        return result;
+    }
+
+    @Override
+    public void deleteNode(Long nodeId, Long teacherId) {
+        KnowledgeNode node = knowledgeNodeMapper.findById(nodeId);
+        if (node == null) {
+            throw new BusinessException(404, "节点不存在");
+        }
+        assertCourseTeacher(node.getCourseId(), teacherId);
+
+        if (knowledgeNodeMapper.countChildren(nodeId) > 0) {
+            throw new BusinessException(409, "节点存在子节点，请先删除或迁移子节点");
+        }
+        if (knowledgeNodeMapper.countQuestionsByNodeId(nodeId) > 0) {
+            throw new BusinessException(409, "节点已关联题目，请先删除或迁移题目");
+        }
+        if (knowledgeNodeMapper.countResourcesByNodeId(nodeId) > 0) {
+            throw new BusinessException(409, "节点已关联资料，请先删除或迁移资料");
+        }
+        if (knowledgeNodeMapper.countMasteryByNodeId(nodeId) > 0) {
+            throw new BusinessException(409, "节点已存在掌握度记录，请先处理");
+        }
+
+        // 先删关联边（级联），再删节点
+        knowledgeEdgeMapper.deleteEdgesByNodeId(nodeId);
+        knowledgeNodeMapper.deleteById(nodeId);
+    }
+
     private Long resolveParentId(Long courseId, String parentCode) {
         if (parentCode == null || parentCode.isBlank()) {
             return null;
@@ -225,59 +305,7 @@ public class KnowledgeGraphServiceImpl implements KnowledgeGraphService {
         return data;
     }
 
-    @Override
-    public Map<String, Object> getNodeStudents(Long courseId, Long nodeId) {
-        KnowledgeNode node = knowledgeNodeMapper.findById(nodeId);
-        List<Map<String, Object>> rows = knowledgeNodeMapper.findStudentsByNodeId(courseId, nodeId);
 
-        double totalScore = 0;
-        List<Map<String, Object>> students = new ArrayList<>();
-        for (Map<String, Object> row : rows) {
-            Number scoreNum = (Number) row.get("mastery_score");
-            double score = scoreNum != null ? scoreNum.doubleValue() : 0.0;
-            totalScore += score;
-
-            Map<String, Object> s = new LinkedHashMap<>();
-            s.put("studentId", row.get("student_id"));
-            s.put("studentName", row.get("student_name"));
-            s.put("masteryScore", Math.round(score));
-            s.put("masteryLevel", computeLevel((int) Math.round(score)));
-            students.add(s);
-        }
-
-        int count = students.size();
-        int avgScore = count > 0 ? (int) Math.round(totalScore / count) : 0;
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("nodeId", nodeId);
-        result.put("nodeName", node != null ? node.getNodeName() : "");
-        result.put("classAvgScore", avgScore);
-        result.put("classAvgLevel", computeLevel(avgScore));
-        result.put("totalStudents", count);
-        result.put("students", students);
-        return result;
-    }
-
-    @Override
-    public Map<String, Object> queryNodes(Long courseId, Long userId, int page, int pageSize) {
-        CourseMember member = courseMemberMapper.findByCourseIdAndUserId(courseId, userId);
-        if (member == null) {
-            throw new BusinessException(403, "你不是该课程的成员");
-        }
-        if (page < 1) page = 1;
-        if (pageSize < 1 || pageSize > 100) pageSize = 100;
-
-        int total = knowledgeNodeMapper.countByCourseId(courseId);
-        int offset = (page - 1) * pageSize;
-        List<NodeQueryResponse> items = knowledgeNodeMapper.findNodesByCourseId(courseId, offset, pageSize);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("items", items);
-        result.put("total", total);
-        result.put("page", page);
-        result.put("pageSize", pageSize);
-        return result;
-    }
 
     private String computeLevel(int score) {
         if (score == 0) return "GRAY";

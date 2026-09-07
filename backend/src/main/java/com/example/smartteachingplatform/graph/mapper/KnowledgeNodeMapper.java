@@ -129,4 +129,20 @@ public interface KnowledgeNodeMapper {
             "node_desc = #{nodeDesc}, difficulty = #{difficulty}, parent_id = #{parentId}, " +
             "sort_order = #{sortOrder}, updated_at = NOW() WHERE id = #{id}")
     int updateNode(KnowledgeNode node);
+
+
+    @Delete("DELETE FROM knowledge_nodes WHERE id = #{id}")
+    int deleteById(@Param("id") Long id);
+
+    @Select("SELECT COUNT(*) FROM knowledge_nodes WHERE parent_id = #{nodeId}")
+    int countChildren(@Param("nodeId") Long nodeId);
+
+    @Select("SELECT COUNT(*) FROM questions WHERE knowledge_node_id = #{nodeId}")
+    int countQuestionsByNodeId(@Param("nodeId") Long nodeId);
+
+    @Select("SELECT COUNT(*) FROM resource_knowledge WHERE knowledge_node_id = #{nodeId}")
+    int countResourcesByNodeId(@Param("nodeId") Long nodeId);
+
+    @Select("SELECT COUNT(*) FROM knowledge_mastery WHERE knowledge_node_id = #{nodeId}")
+    int countMasteryByNodeId(@Param("nodeId") Long nodeId);
 }
