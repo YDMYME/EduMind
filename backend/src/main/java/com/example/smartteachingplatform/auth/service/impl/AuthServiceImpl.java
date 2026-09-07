@@ -68,16 +68,16 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public Map<String, Object> login(String email, String password) {
-        User user = userMapper.findByEmail(email);
+    public Map<String, Object> login(String account, String password) {
+        User user = userMapper.findByAccount(account);
         if (user == null) {
-            throw new BusinessException(401, "邮箱或密码错误");
+            throw new BusinessException(401, "账号或密码错误");
         }
         if (!"active".equals(user.getStatus())) {
             throw new BusinessException(401, "账号已被禁用");
         }
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new BusinessException(401, "邮箱或密码错误");
+            throw new BusinessException(401, "账号或密码错误");
         }
 
         String role = safeRole(user);

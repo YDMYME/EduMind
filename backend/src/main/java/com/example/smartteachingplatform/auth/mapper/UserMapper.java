@@ -24,6 +24,15 @@ public interface UserMapper {
     })
     User findByEmail(String email);
 
+    @Select("SELECT u.*, r.role_code FROM users u " +
+            "LEFT JOIN user_roles ur ON u.id = ur.user_id " +
+            "LEFT JOIN roles r ON ur.role_id = r.id " +
+            "WHERE u.email = #{account} OR u.username = #{account} OR u.user_no = #{account}")
+    @Results({
+            @Result(column = "role_code", property = "roleCode")
+    })
+    User findByAccount(String account);
+
     @Insert("INSERT INTO users (username, password_hash, real_name, email, status, created_at, updated_at) " +
             "VALUES (#{username}, #{passwordHash}, #{realName}, #{email}, 'active', NOW(), NOW())")
     @Options(useGeneratedKeys = true, keyProperty = "id")
