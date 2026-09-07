@@ -1,16 +1,16 @@
 package com.example.smartteachingplatform.graph.controller;
 
+import com.example.smartteachingplatform.common.response.Result;
 import com.example.smartteachingplatform.common.util.SecurityUtils;
+import com.example.smartteachingplatform.graph.dto.KnowledgeImportPreviewResponse;
 import com.example.smartteachingplatform.graph.service.KnowledgeImportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/courses/{courseId}/knowledge-imports")
@@ -29,5 +29,14 @@ public class KnowledgeImportController {
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=knowledge_import_template.xlsx")
                 .body(bytes);
+    }
+
+    @PostMapping("/preview")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<KnowledgeImportPreviewResponse> preview(
+            @PathVariable Long courseId,
+            @RequestParam("file") MultipartFile file) {
+        return Result.success(knowledgeImportService.preview(
+                courseId, SecurityUtils.getUserId(), file));
     }
 }
