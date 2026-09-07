@@ -2,6 +2,7 @@ package com.example.smartteachingplatform.graph.controller;
 
 import com.example.smartteachingplatform.common.response.Result;
 import com.example.smartteachingplatform.common.util.SecurityUtils;
+import com.example.smartteachingplatform.graph.dto.KnowledgeImportCommitResponse;
 import com.example.smartteachingplatform.graph.dto.KnowledgeImportPreviewResponse;
 import com.example.smartteachingplatform.graph.service.KnowledgeImportService;
 import lombok.RequiredArgsConstructor;
@@ -38,5 +39,14 @@ public class KnowledgeImportController {
             @RequestParam("file") MultipartFile file) {
         return Result.success(knowledgeImportService.preview(
                 courseId, SecurityUtils.getUserId(), file));
+    }
+
+    @PostMapping("/{importToken}/commit")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<KnowledgeImportCommitResponse> commit(
+            @PathVariable Long courseId,
+            @PathVariable String importToken) {
+        return Result.success(knowledgeImportService.commit(
+                courseId, SecurityUtils.getUserId(), importToken));
     }
 }

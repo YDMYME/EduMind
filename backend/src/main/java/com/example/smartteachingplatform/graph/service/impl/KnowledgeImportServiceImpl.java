@@ -4,7 +4,11 @@ import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.ExcelWriter;
 import com.example.smartteachingplatform.common.exception.BusinessException;
 import com.example.smartteachingplatform.course.mapper.CourseMapper;
+import com.example.smartteachingplatform.graph.dto.KnowledgeImportCommitResponse;
 import com.example.smartteachingplatform.graph.dto.KnowledgeImportPreviewResponse;
+import com.example.smartteachingplatform.graph.entity.KnowledgeEdge;
+import com.example.smartteachingplatform.graph.entity.KnowledgeNode;
+import com.example.smartteachingplatform.graph.mapper.KnowledgeEdgeMapper;
 import com.example.smartteachingplatform.graph.mapper.KnowledgeNodeMapper;
 import com.example.smartteachingplatform.graph.service.KnowledgeImportService;
 import com.example.smartteachingplatform.graph.service.impl.KnowledgeImportSessionStore.ImportSession;
@@ -15,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,6 +38,7 @@ public class KnowledgeImportServiceImpl implements KnowledgeImportService {
     private final CourseMapper courseMapper;
     private final KnowledgeNodeMapper knowledgeNodeMapper; // findByCode 查节点编码
     private final KnowledgeImportSessionStore sessionStore; // 缓存预览结果
+    private final KnowledgeEdgeMapper knowledgeEdgeMapper;
 
     @Override
     public byte[] buildTemplate(Long courseId, Long teacherId) {
@@ -187,7 +193,7 @@ public class KnowledgeImportServiceImpl implements KnowledgeImportService {
         resp.setWarnings(warnings);
         resp.setErrors(errors);
 
-        // ===== 缓存（只缓存无 error 的节点/边，供 §5.2 提交）=====
+        // ===== 缓存 =====
         List<ImportedNode> validNodeList = importedNodes.stream()
                 .filter(n -> !errorNodeRows.contains(n.getRow())).collect(Collectors.toList());
         List<ImportedEdge> validEdgeList = importedEdges.stream()
@@ -204,6 +210,107 @@ public class KnowledgeImportServiceImpl implements KnowledgeImportService {
         sessionStore.put(token, session);
 
         resp.setImportToken(token);
+        return resp;
+    }
+
+
+    @Override
+    public KnowledgeImportCommitResponse commit(Long courseId, Long teacherId, String importToken) {
+        assertCourseTeacher(courseId, teacherId);
+
+        ImportSession session = sessionStore.get(importToken);
+        if (session == null) {
+            throw new BusinessException(400, "importToken 无效或已过期");
+        }
+        if (!session.getCourseId().equals(courseId)) {
+            throw new BusinessException(400, "importToken 与课程不匹配");
+        }
+
+        KnowledgeImportCommitResponse resp = new KnowledgeImportCommitResponse();
+        List<KnowledgeImportCommitResponse.FailedRow> failedRows = new ArrayList<>();
+        Map<String, Long> codeToId = new HashMap<>();
+        int createdNodes = 0, updatedNodes = 0, createdEdges = 0;
+
+        // 第一遍：插入/更新节点，建立 code -> id 映射
+        for (ImportedNode n : session.getNodes()) {
+            try {
+                KnowledgeNode existing = knowledgeNodeMapper.findByCode(courseId, n.getNodeCode());
+                Long nodeId;
+                if (existing == null) {
+                    KnowledgeNode node = new KnowledgeNode();
+                    node.setCourseId(courseId);
+                    node.setNodeName(n.getName());
+                    node.setNodeDesc(n.getDescription());
+                    node.setNodeCode(n.getNodeCode());
+                    node.setDifficulty(1);
+                    node.setSortOrder(n.getOrderNo());
+                    node.setStatus("active");
+                    knowledgeNodeMapper.insert(node);
+                    nodeId = node.getId();
+                    createdNodes++;
+                } else {
+                    nodeId = existing.getId();
+                    KnowledgeNode node = new KnowledgeNode();
+                    node.setId(nodeId);
+                    node.setNodeName(n.getName());
+                    node.setNodeDesc(n.getDescription());
+                    node.setSortOrder(n.getOrderNo());
+                    knowledgeNodeMapper.update(node);
+                    updatedNodes++;
+                }
+                codeToId.put(n.getNodeCode(), nodeId);
+            } catch (Exception e) {
+                KnowledgeImportCommitResponse.FailedRow fr = new KnowledgeImportCommitResponse.FailedRow();
+                fr.setRow(n.getRow());
+                fr.setMessage(e.getMessage());
+                failedRows.add(fr);
+            }
+        }
+
+        // 第二遍：回填 parent_id
+        for (ImportedNode n : session.getNodes()) {
+            if (n.getParentCode() == null) continue;
+            Long nodeId = codeToId.get(n.getNodeCode());
+            Long parentId = codeToId.get(n.getParentCode());
+            if (nodeId != null && parentId != null) {
+                knowledgeNodeMapper.updateParent(nodeId, parentId);
+            }
+        }
+
+        // 第三遍：插入边
+        for (ImportedEdge e : session.getEdges()) {
+            try {
+                Long fromId = codeToId.get(e.getFromCode());
+                Long toId = codeToId.get(e.getToCode());
+                if (fromId == null || toId == null) {
+                    KnowledgeImportCommitResponse.FailedRow fr = new KnowledgeImportCommitResponse.FailedRow();
+                    fr.setRow(e.getRow());
+                    fr.setMessage("边的节点编码无法解析");
+                    failedRows.add(fr);
+                    continue;
+                }
+                KnowledgeEdge edge = new KnowledgeEdge();
+                edge.setCourseId(courseId);
+                edge.setSourceNodeId(fromId);
+                edge.setTargetNodeId(toId);
+                edge.setRelationType(e.getRelationType());
+                edge.setWeight(new BigDecimal("1.00"));
+                knowledgeEdgeMapper.insert(edge);
+                createdEdges++;
+            } catch (Exception ex) {
+                KnowledgeImportCommitResponse.FailedRow fr = new KnowledgeImportCommitResponse.FailedRow();
+                fr.setRow(e.getRow());
+                fr.setMessage(ex.getMessage());
+                failedRows.add(fr);
+            }
+        }
+
+        sessionStore.remove(importToken);
+
+        resp.setCreatedNodes(createdNodes);
+        resp.setUpdatedNodes(updatedNodes);
+        resp.setCreatedEdges(createdEdges);
+        resp.setFailedRows(failedRows);
         return resp;
     }
 

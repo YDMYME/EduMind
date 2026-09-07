@@ -1,5 +1,6 @@
 package com.example.smartteachingplatform.graph.service;
 
+import com.example.smartteachingplatform.graph.dto.KnowledgeImportCommitResponse;
 import com.example.smartteachingplatform.graph.dto.KnowledgeImportPreviewResponse;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,4 +23,6 @@ public interface KnowledgeImportService {
      * @return 预览结果
      */
     KnowledgeImportPreviewResponse preview(Long courseId, Long teacherId, MultipartFile file);
+
+    KnowledgeImportCommitResponse commit(Long courseId, Long teacherId, String importToken);
 }

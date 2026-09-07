@@ -68,9 +68,9 @@ public interface KnowledgeNodeMapper {
     KnowledgeNode findByCode(@Param("courseId") Long courseId, @Param("nodeCode") String nodeCode);
 
     /** 插入单个知识点节点 */
-    @Insert("INSERT INTO knowledge_nodes (course_id, parent_id, node_name, node_desc, " +
+    @Insert("INSERT INTO knowledge_nodes (course_id, parent_id, node_name, node_desc, node_code, " +
             "difficulty, sort_order, x_position, y_position, status, created_at, updated_at) " +
-            "VALUES (#{courseId}, #{parentId}, #{nodeName}, #{nodeDesc}, #{difficulty}, " +
+            "VALUES (#{courseId}, #{parentId}, #{nodeName}, #{nodeDesc}, #{nodeCode}, #{difficulty}, " +
             "#{sortOrder}, #{xPosition}, #{yPosition}, #{status}, NOW(), NOW())")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(KnowledgeNode node);
@@ -90,4 +90,11 @@ public interface KnowledgeNodeMapper {
             "ORDER BY COALESCE(km.mastery_score, 0) ASC")
     List<Map<String, Object>> findStudentsByNodeId(@Param("courseId") Long courseId,
                                                      @Param("nodeId") Long nodeId);
+
+    @Update("UPDATE knowledge_nodes SET node_name = #{nodeName}, node_desc = #{nodeDesc}, " +
+            "sort_order = #{sortOrder}, updated_at = NOW() WHERE id = #{id}")
+    int update(KnowledgeNode node);
+
+    @Update("UPDATE knowledge_nodes SET parent_id = #{parentId}, updated_at = NOW() WHERE id = #{id}")
+    int updateParent(@Param("id") Long id, @Param("parentId") Long parentId);
 }
