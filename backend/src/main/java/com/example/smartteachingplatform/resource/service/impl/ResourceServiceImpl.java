@@ -9,7 +9,7 @@ import com.example.smartteachingplatform.resource.service.ResourceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.example.smartteachingplatform.course.mapper.CourseMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,34 +28,38 @@ public class ResourceServiceImpl implements ResourceService {
     private final ResourceMapper resourceMapper;
     private final KnowledgeNodeMapper knowledgeNodeMapper;
     private final CourseMemberMapper courseMemberMapper;
+    private final CourseMapper courseMapper;
 
     @Override
     @Transactional
     public Map<String, Object> uploadResource(Long courseId, Long teacherId, Map<String, Object> body) {
+        // 本课程教师校验
+        Long ownerId = courseMapper.findTeacherIdByCourseId(courseId);
+        if (ownerId == null) {
+            throw new BusinessException(404, "课程不存在");
+        }
+        if (!teacherId.equals(ownerId)) {
+            throw new BusinessException(403, "你不是该课程的教师");
+        }
+
         Resource resource = new Resource();
         resource.setCourseId(courseId);
         resource.setUploaderId(teacherId);
         resource.setResourceName((String) body.get("name"));
-        resource.setResourceType(((String) body.get("type")).toLowerCase());
+        resource.setResourceType(((String) body.get("resourceType")).toLowerCase());
         resource.setFileUrl((String) body.get("url"));
-
-        Object fileSize = body.get("fileSize");
-        if (fileSize instanceof Number) {
-            resource.setFileSize(((Number) fileSize).longValue());
-        }
-        Object duration = body.get("duration");
-        if (duration instanceof Number) {
-            resource.setDuration(((Number) duration).intValue());
-        }
         resource.setDescription((String) body.get("description"));
 
         resourceMapper.insert(resource);
 
-        Object nodeId = body.get("nodeId");
-        if (nodeId != null) {
-            long kid = nodeId instanceof Number ? ((Number) nodeId).longValue()
-                                                 : Long.parseLong(nodeId.toString());
-            resourceMapper.bindKnowledgeNode(resource.getId(), kid);
+        // 绑定多个知识点
+        Object nodeIdsObj = body.get("nodeIds");
+        if (nodeIdsObj instanceof List<?> list) {
+            for (Object item : list) {
+                long nodeId = item instanceof Number ? ((Number) item).longValue()
+                        : Long.parseLong(item.toString());
+                resourceMapper.bindKnowledgeNode(resource.getId(), nodeId);
+            }
         }
 
         return Map.of("resourceId", resource.getId());
