@@ -1,7 +1,7 @@
 package com.example.smartteachingplatform.assignment.service;
 
 import com.example.smartteachingplatform.assignment.dto.AssignmentRequest;
-
+import com.example.smartteachingplatform.assignment.dto.AssignmentDetailResponse;
 import java.util.Map;
 
 public interface AssignmentService {
@@ -15,4 +15,10 @@ public interface AssignmentService {
     Map<String, Object> publish(Long assignmentId, Long teacherId);
 
     Map<String, Object> close(Long assignmentId, Long teacherId);
+
+    Map<String, Object> listStudentAssignments(Long studentId, int page, int pageSize);
+
+    Map<String, Object> listStudentAssignmentsByCourse(Long studentId, Long courseId, int page, int pageSize);
+
+    AssignmentDetailResponse getDetail(Long assignmentId, Long studentId);
 }

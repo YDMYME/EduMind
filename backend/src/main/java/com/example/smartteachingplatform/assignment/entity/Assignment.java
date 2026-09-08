@@ -26,4 +26,7 @@ public class Assignment {
 
     /** 提交人数，列表查询 JOIN 聚合 */
     private Long submissionCount;
+
+    /** 课程名，列表查询 JOIN courses */
+    private String courseName;
 }

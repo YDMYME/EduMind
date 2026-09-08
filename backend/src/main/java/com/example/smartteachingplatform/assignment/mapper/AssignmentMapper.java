@@ -45,4 +45,40 @@ public interface AssignmentMapper {
 
     @Update("UPDATE assignments SET status = #{status}, updated_at = NOW() WHERE id = #{id}")
     int updateStatus(@Param("id") Long id, @Param("status") String status);
+
+    /** 学生分页查询（仅已发布/已关闭，且本人已加入课程） */
+    @Select("SELECT a.*, c.course_name AS course_name FROM assignments a " +
+            "JOIN courses c ON a.course_id = c.id " +
+            "JOIN course_members cm ON a.course_id = cm.course_id " +
+            "  AND cm.user_id = #{studentId} AND cm.member_role = 'student' AND cm.status = 'active' " +
+            "WHERE a.status IN ('published','closed') ORDER BY a.created_at DESC " +
+            "LIMIT #{limit} OFFSET #{offset}")
+    List<Assignment> findPublishedPageByStudent(@Param("studentId") Long studentId,
+                                                @Param("offset") int offset,
+                                                @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM assignments a " +
+            "JOIN course_members cm ON a.course_id = cm.course_id " +
+            "  AND cm.user_id = #{studentId} AND cm.member_role = 'student' AND cm.status = 'active' " +
+            "WHERE a.status IN ('published','closed')")
+    long countPublishedByStudent(Long studentId);
+
+    /** 学生按课程分页查询（仅已发布/已关闭，且本人已加入该课程） */
+    @Select("SELECT a.*, c.course_name AS course_name FROM assignments a " +
+            "JOIN courses c ON a.course_id = c.id " +
+            "JOIN course_members cm ON a.course_id = cm.course_id " +
+            "  AND cm.user_id = #{studentId} AND cm.member_role = 'student' AND cm.status = 'active' " +
+            "WHERE a.status IN ('published','closed') AND a.course_id = #{courseId} " +
+            "ORDER BY a.created_at DESC LIMIT #{limit} OFFSET #{offset}")
+    List<Assignment> findPublishedPageByStudentAndCourse(@Param("studentId") Long studentId,
+                                                         @Param("courseId") Long courseId,
+                                                         @Param("offset") int offset,
+                                                         @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM assignments a " +
+            "JOIN course_members cm ON a.course_id = cm.course_id " +
+            "  AND cm.user_id = #{studentId} AND cm.member_role = 'student' AND cm.status = 'active' " +
+            "WHERE a.status IN ('published','closed') AND a.course_id = #{courseId}")
+    long countPublishedByStudentAndCourse(@Param("studentId") Long studentId,
+                                          @Param("courseId") Long courseId);
 }

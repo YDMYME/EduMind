@@ -6,6 +6,7 @@ import com.example.smartteachingplatform.assignment.entity.Assignment;
 import com.example.smartteachingplatform.assignment.mapper.AssignmentMapper;
 import com.example.smartteachingplatform.assignment.service.AssignmentService;
 import com.example.smartteachingplatform.common.exception.BusinessException;
+import com.example.smartteachingplatform.course.entity.Course;
 import com.example.smartteachingplatform.course.mapper.CourseMapper;
 import com.example.smartteachingplatform.graph.entity.KnowledgeNode;
 import com.example.smartteachingplatform.graph.mapper.KnowledgeNodeMapper;
@@ -19,7 +20,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
+import com.example.smartteachingplatform.assignment.dto.AssignmentDetailResponse;
+import com.example.smartteachingplatform.assignment.dto.MySubmissionDto;
+import com.example.smartteachingplatform.assignment.entity.AssignmentSubmission;
+import com.example.smartteachingplatform.assignment.mapper.AssignmentSubmissionMapper;
+import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -28,6 +33,8 @@ public class AssignmentServiceImpl implements AssignmentService {
     private final AssignmentMapper assignmentMapper;
     private final CourseMapper courseMapper;
     private final KnowledgeNodeMapper knowledgeNodeMapper;
+    private final CourseMemberMapper courseMemberMapper;
+    private final AssignmentSubmissionMapper submissionMapper;
 
     @Override
     @Transactional
@@ -115,6 +122,48 @@ public class AssignmentServiceImpl implements AssignmentService {
         return Map.of("assignmentId", assignmentId, "status", target);
     }
 
+    @Override
+    public Map<String, Object> listStudentAssignments(Long studentId, int page, int pageSize) {
+        int offset = (page - 1) * pageSize;
+        List<Assignment> list = assignmentMapper.findPublishedPageByStudent(studentId, offset, pageSize);
+        long total = assignmentMapper.countPublishedByStudent(studentId);
+
+        List<AssignmentDetailResponse> items = list.stream()
+                .map(a -> toDetail(a, studentId))
+                .collect(Collectors.toList());
+        return buildPage(items, total, page, pageSize);
+    }
+
+    @Override
+    public Map<String, Object> listStudentAssignmentsByCourse(Long studentId, Long courseId, int page, int pageSize) {
+        int offset = (page - 1) * pageSize;
+        List<Assignment> list = assignmentMapper.findPublishedPageByStudentAndCourse(studentId, courseId, offset, pageSize);
+        long total = assignmentMapper.countPublishedByStudentAndCourse(studentId, courseId);
+
+        List<AssignmentDetailResponse> items = list.stream()
+                .map(a -> toDetail(a, studentId))
+                .collect(Collectors.toList());
+        return buildPage(items, total, page, pageSize);
+    }
+
+    @Override
+    public AssignmentDetailResponse getDetail(Long assignmentId, Long studentId) {
+        Assignment a = assignmentMapper.findById(assignmentId);
+        if (a == null) throw new BusinessException(404, "作业不存在");
+        assertStudentInCourse(a.getCourseId(), studentId);
+        if (!List.of("published", "closed").contains(a.getStatus())) {
+            throw new BusinessException(404, "作业不存在");
+        }
+        AssignmentDetailResponse resp = toDetail(a, studentId);
+        if (resp.getCourseName() == null) {
+            Course course = courseMapper.findById(a.getCourseId());
+            resp.setCourseName(course != null ? course.getCourseName() : null);
+        }
+        return resp;
+    }
+
+
+
     // ────────── 工具方法 ──────────
 
     private void assertTeacher(Long courseId, Long teacherId) {
@@ -177,5 +226,38 @@ public class AssignmentServiceImpl implements AssignmentService {
         data.put("page", page);
         data.put("pageSize", pageSize);
         return data;
+    }
+
+    private AssignmentDetailResponse toDetail(Assignment a, Long studentId) {
+        AssignmentDetailResponse resp = new AssignmentDetailResponse();
+        resp.setCourseId(a.getCourseId());
+        resp.setCourseName(a.getCourseName());
+        resp.setAssignmentId(a.getId());
+        resp.setTitle(a.getTitle());
+        resp.setDescription(a.getDescription());
+        resp.setSubmissionType(a.getSubmissionType());
+        resp.setNodeIds(assignmentMapper.findNodeIds(a.getId()));
+        resp.setStartTime(a.getStartTime());
+        resp.setEndTime(a.getEndTime());
+        resp.setTotalScore(a.getTotalScore());
+        resp.setStatus(a.getStatus());
+
+        AssignmentSubmission sub = submissionMapper.findByAssignmentAndStudent(a.getId(), studentId);
+        if (sub != null) {
+            MySubmissionDto my = new MySubmissionDto();
+            my.setSubmissionId(sub.getId());
+            my.setStatus(sub.getStatus());
+            my.setScore(sub.getScore());
+            my.setFeedback(sub.getFeedback());
+            my.setSubmittedAt(sub.getSubmittedAt());
+            resp.setMySubmission(my);
+        }
+        return resp;
+    }
+
+    private void assertStudentInCourse(Long courseId, Long studentId) {
+        if (courseMemberMapper.findByCourseIdAndUserId(courseId, studentId) == null) {
+            throw new BusinessException(403, "未加入该课程");
+        }
     }
 }

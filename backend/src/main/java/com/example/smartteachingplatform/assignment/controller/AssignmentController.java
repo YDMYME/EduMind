@@ -10,7 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
-
+import com.example.smartteachingplatform.assignment.dto.AssignmentDetailResponse;
 @RestController
 @RequiredArgsConstructor
 public class AssignmentController {
@@ -49,5 +49,26 @@ public class AssignmentController {
     @PreAuthorize("hasRole('TEACHER')")
     public Result<Map<String, Object>> close(@PathVariable Long assignmentId) {
         return Result.success(assignmentService.close(assignmentId, SecurityUtils.getUserId()));
+    }
+
+    @GetMapping("/api/student/assignments")
+    @PreAuthorize("hasRole('STUDENT')")
+    public Result<Map<String, Object>> studentList(@RequestParam(defaultValue = "1") int page,
+                                                   @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(assignmentService.listStudentAssignments(SecurityUtils.getUserId(), page, pageSize));
+    }
+
+    @GetMapping("/api/assignments/{assignmentId}")
+    @PreAuthorize("hasRole('STUDENT')")
+    public Result<AssignmentDetailResponse> detail(@PathVariable Long assignmentId) {
+        return Result.success(assignmentService.getDetail(assignmentId, SecurityUtils.getUserId()));
+    }
+
+    @GetMapping("/api/courses/{courseId}/assignments/mine")
+    @PreAuthorize("hasRole('STUDENT')")
+    public Result<Map<String, Object>> myAssignments(@PathVariable Long courseId,
+                                                     @RequestParam(defaultValue = "1") int page,
+                                                     @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(assignmentService.listStudentAssignmentsByCourse(SecurityUtils.getUserId(), courseId, page, pageSize));
     }
 }
