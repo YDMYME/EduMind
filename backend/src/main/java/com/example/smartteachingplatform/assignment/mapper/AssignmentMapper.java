@@ -42,4 +42,7 @@ public interface AssignmentMapper {
 
     @Select("SELECT knowledge_node_id FROM assignment_nodes WHERE assignment_id = #{assignmentId}")
     List<Long> findNodeIds(Long assignmentId);
+
+    @Update("UPDATE assignments SET status = #{status}, updated_at = NOW() WHERE id = #{id}")
+    int updateStatus(@Param("id") Long id, @Param("status") String status);
 }

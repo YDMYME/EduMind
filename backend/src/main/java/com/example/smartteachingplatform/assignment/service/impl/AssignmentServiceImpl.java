@@ -89,6 +89,32 @@ public class AssignmentServiceImpl implements AssignmentService {
         return buildPage(items, total, page, pageSize);
     }
 
+    @Override
+    @Transactional
+    public Map<String, Object> publish(Long assignmentId, Long teacherId) {
+        return changeStatus(assignmentId, teacherId, "published");
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> close(Long assignmentId, Long teacherId) {
+        return changeStatus(assignmentId, teacherId, "closed");
+    }
+
+    private Map<String, Object> changeStatus(Long assignmentId, Long teacherId, String target) {
+        Assignment a = assignmentMapper.findById(assignmentId);
+        if (a == null) throw new BusinessException(404, "作业不存在");
+        assertTeacher(a.getCourseId(), teacherId);
+
+        if ("published".equals(target) && "closed".equals(a.getStatus())) {
+            throw new BusinessException(409, "作业已关闭，不能重新发布");
+        }
+
+        assignmentMapper.updateStatus(assignmentId, target);
+        log.info("作业状态变更: id={}, {} -> {}", assignmentId, a.getStatus(), target);
+        return Map.of("assignmentId", assignmentId, "status", target);
+    }
+
     // ────────── 工具方法 ──────────
 
     private void assertTeacher(Long courseId, Long teacherId) {

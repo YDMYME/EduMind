@@ -11,4 +11,8 @@ public interface AssignmentService {
     Map<String, Object> updateAssignment(Long assignmentId, Long teacherId, AssignmentRequest req);
 
     Map<String, Object> listAssignments(Long courseId, Long teacherId, int page, int pageSize);
+
+    Map<String, Object> publish(Long assignmentId, Long teacherId);
+
+    Map<String, Object> close(Long assignmentId, Long teacherId);
 }

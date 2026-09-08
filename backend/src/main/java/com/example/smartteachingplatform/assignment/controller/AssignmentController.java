@@ -38,4 +38,16 @@ public class AssignmentController {
                                             @RequestParam(defaultValue = "20") int pageSize) {
         return Result.success(assignmentService.listAssignments(courseId, SecurityUtils.getUserId(), page, pageSize));
     }
+
+    @PostMapping("/api/assignments/{assignmentId}/publish")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> publish(@PathVariable Long assignmentId) {
+        return Result.success(assignmentService.publish(assignmentId, SecurityUtils.getUserId()));
+    }
+
+    @PostMapping("/api/assignments/{assignmentId}/close")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> close(@PathVariable Long assignmentId) {
+        return Result.success(assignmentService.close(assignmentId, SecurityUtils.getUserId()));
+    }
 }
