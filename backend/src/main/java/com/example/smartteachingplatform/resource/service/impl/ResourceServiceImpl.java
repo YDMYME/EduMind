@@ -252,6 +252,60 @@ public class ResourceServiceImpl implements ResourceService {
         return data;
     }
 
+    @Override
+    @Transactional
+    public Map<String, Object> updateResource(Long resourceId, Long teacherId, Map<String, Object> body) {
+        Resource resource = resourceMapper.findById(resourceId);
+        if (resource == null) {
+            throw new BusinessException(404, "资料不存在");
+        }
+        Long ownerId = courseMapper.findTeacherIdByCourseId(resource.getCourseId());
+        if (ownerId == null) {
+            throw new BusinessException(404, "课程不存在");
+        }
+        if (!teacherId.equals(ownerId)) {
+            throw new BusinessException(403, "你不是该课程的教师");
+        }
+
+        resource.setResourceName((String) body.get("name"));
+        resource.setResourceType(((String) body.get("resourceType")).toLowerCase());
+        resource.setFileUrl((String) body.get("url"));
+        resource.setDescription((String) body.get("description"));
+        resourceMapper.update(resource);
+
+        // 重建节点关联
+        resourceMapper.deleteBindingsByResourceId(resourceId);
+        Object nodeIdsObj = body.get("nodeIds");
+        if (nodeIdsObj instanceof List<?> list) {
+            for (Object item : list) {
+                long nodeId = item instanceof Number ? ((Number) item).longValue()
+                        : Long.parseLong(item.toString());
+                resourceMapper.bindKnowledgeNode(resourceId, nodeId);
+            }
+        }
+
+        return Map.of("resourceId", resourceId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteResource(Long resourceId, Long teacherId) {
+        Resource resource = resourceMapper.findById(resourceId);
+        if (resource == null) {
+            throw new BusinessException(404, "资料不存在");
+        }
+        Long ownerId = courseMapper.findTeacherIdByCourseId(resource.getCourseId());
+        if (ownerId == null) {
+            throw new BusinessException(404, "课程不存在");
+        }
+        if (!teacherId.equals(ownerId)) {
+            throw new BusinessException(403, "你不是该课程的教师");
+        }
+
+        resourceMapper.deleteBindingsByResourceId(resourceId);
+        resourceMapper.deleteById(resourceId);
+    }
+
     private List<Long> parseNodeIds(String nodeIdsStr) {
         if (nodeIdsStr == null || nodeIdsStr.isBlank()) {
             return List.of();

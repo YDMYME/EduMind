@@ -17,4 +17,8 @@ public interface ResourceService {
     Map<String, Object> uploadFile(Long courseId, Long teacherId, MultipartFile file,
                                    String name, String resourceType, String description,
                                    String nodeIds);
+
+    Map<String, Object> updateResource(Long resourceId, Long teacherId, Map<String, Object> body);
+
+    void deleteResource(Long resourceId, Long teacherId);
 }

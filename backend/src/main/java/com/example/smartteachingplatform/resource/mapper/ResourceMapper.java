@@ -52,4 +52,18 @@ public interface ResourceMapper {
 
 
     List<Map<String, Object>> findNodeIdsByResourceIds(@Param("resourceIds") List<Long> resourceIds);
+
+    @Select("SELECT * FROM resources WHERE id = #{id}")
+    Resource findById(@Param("id") Long id);
+
+    @Update("UPDATE resources SET resource_name = #{resourceName}, resource_type = #{resourceType}, " +
+            "file_url = #{fileUrl}, description = #{description}, updated_at = NOW() " +
+            "WHERE id = #{id}")
+    int update(Resource resource);
+
+    @Delete("DELETE FROM resources WHERE id = #{id}")
+    int deleteById(@Param("id") Long id);
+
+    @Delete("DELETE FROM resource_knowledge WHERE resource_id = #{resourceId}")
+    int deleteBindingsByResourceId(@Param("resourceId") Long resourceId);
 }
