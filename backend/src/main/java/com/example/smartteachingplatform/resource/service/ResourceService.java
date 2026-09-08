@@ -1,5 +1,7 @@
 package com.example.smartteachingplatform.resource.service;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.Map;
 
 public interface ResourceService {
@@ -11,4 +13,8 @@ public interface ResourceService {
     Map<String, Object> listResources(Long courseId, Long userId, int page, int pageSize);
 
     Map<String, Object> getNodeResources(Long nodeId, Long userId);
+
+    Map<String, Object> uploadFile(Long courseId, Long teacherId, MultipartFile file,
+                                   String name, String resourceType, String description,
+                                   String nodeIds);
 }

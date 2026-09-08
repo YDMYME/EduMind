@@ -16,7 +16,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import com.example.smartteachingplatform.course.entity.CourseMember;
 import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
-
+import com.example.smartteachingplatform.resource.service.MinioStorageService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,6 +32,8 @@ public class ResourceServiceImpl implements ResourceService {
     private final KnowledgeNodeMapper knowledgeNodeMapper;
     private final CourseMemberMapper courseMemberMapper;
     private final CourseMapper courseMapper;
+    private final MinioStorageService minioStorageService;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -202,5 +207,59 @@ public class ResourceServiceImpl implements ResourceService {
         data.put("node", nodeMap);
         data.put("resources", resourceList);
         return data;
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> uploadFile (Long courseId, Long teacherId, MultipartFile file,
+                                           String name, String resourceType, String description,
+                                           String nodeIdsStr)
+    {
+        Long ownerId = courseMapper.findTeacherIdByCourseId(courseId);
+        if (ownerId == null) {
+            throw new BusinessException(404, "课程不存在");
+        }
+        if (!teacherId.equals(ownerId)) {
+            throw new BusinessException(403, "你不是该课程的教师");
+        }
+
+        String url = minioStorageService.upload(file);
+        String resourceName = (name == null || name.isBlank()) ? file.getOriginalFilename() : name;
+
+        Resource resource = new Resource();
+        resource.setCourseId(courseId);
+        resource.setUploaderId(teacherId);
+        resource.setResourceName(resourceName);
+        resource.setResourceType(resourceType.toLowerCase());
+        resource.setFileUrl(url);
+        resource.setFileSize(file.getSize());
+        resource.setDescription(description);
+
+        resourceMapper.insert(resource);
+
+        List<Long> nodeIds = parseNodeIds(nodeIdsStr);
+        for (Long nodeId : nodeIds) {
+            resourceMapper.bindKnowledgeNode(resource.getId(), nodeId);
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("resourceId", resource.getId());
+        data.put("name", resource.getResourceName());
+        data.put("resourceType", resource.getResourceType());
+        data.put("type", resource.getResourceType().toUpperCase());
+        data.put("url", resource.getFileUrl());
+        data.put("nodeIds", nodeIds);
+        return data;
+    }
+
+    private List<Long> parseNodeIds(String nodeIdsStr) {
+        if (nodeIdsStr == null || nodeIdsStr.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(nodeIdsStr, new TypeReference<List<Long>>() {});
+        } catch (Exception e) {
+            throw new BusinessException(400, "nodeIds 格式错误");
+        }
     }
 }

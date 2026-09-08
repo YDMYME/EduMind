@@ -8,7 +8,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
-
+import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/courses")
 @RequiredArgsConstructor
@@ -38,5 +38,17 @@ public class ResourceController {
                                                      @RequestParam(defaultValue = "20") int pageSize) {
         return Result.success(resourceService.listResources(
                 courseId, SecurityUtils.getUserId(), page, pageSize));
+    }
+
+    @PostMapping("/{courseId}/resources/upload")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> uploadFile(@PathVariable Long courseId,
+                                                  @RequestPart("file") MultipartFile file,
+                                                  @RequestParam(required = false) String name,
+                                                  @RequestParam String resourceType,
+                                                  @RequestParam(required = false) String description,
+                                                  @RequestParam String nodeIds) {
+        return Result.success(resourceService.uploadFile(
+                courseId, SecurityUtils.getUserId(), file, name, resourceType, description, nodeIds));
     }
 }
