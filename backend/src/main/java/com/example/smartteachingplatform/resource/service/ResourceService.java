@@ -9,4 +9,6 @@ public interface ResourceService {
     Map<String, Object> getLearning(Long courseId, Long nodeId);
 
     Map<String, Object> listResources(Long courseId, Long userId, int page, int pageSize);
+
+    Map<String, Object> getNodeResources(Long nodeId, Long userId);
 }

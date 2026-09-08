@@ -148,4 +148,55 @@ public class ResourceServiceImpl implements ResourceService {
         result.put("pageSize", pageSize);
         return result;
     }
+
+    @Override
+    public Map<String, Object> getNodeResources(Long nodeId, Long userId) {
+        KnowledgeNode node = knowledgeNodeMapper.findById(nodeId);
+        if (node == null) {
+            throw new BusinessException(404, "知识点不存在");
+        }
+        Long courseId = node.getCourseId();
+
+        CourseMember member = courseMemberMapper.findByCourseIdAndUserId(courseId, userId);
+        if (member == null) {
+            throw new BusinessException(403, "你不是该课程的成员");
+        }
+
+        List<Resource> resources = resourceMapper.findByKnowledgeNodeId(courseId, nodeId);
+
+        // 批量查每个资源关联的节点 id
+        List<Long> ids = resources.stream().map(Resource::getId).collect(Collectors.toList());
+        Map<Long, List<Long>> nodeIdsMap = new HashMap<>();
+        if (!ids.isEmpty()) {
+            for (Map<String, Object> row : resourceMapper.findNodeIdsByResourceIds(ids)) {
+                Long rid = ((Number) row.get("resource_id")).longValue();
+                Long nid = ((Number) row.get("knowledge_node_id")).longValue();
+                nodeIdsMap.computeIfAbsent(rid, k -> new ArrayList<>()).add(nid);
+            }
+        }
+
+        Map<String, Object> nodeMap = new LinkedHashMap<>();
+        nodeMap.put("id", node.getId());
+        nodeMap.put("name", node.getNodeName());
+        nodeMap.put("description", node.getNodeDesc());
+
+        List<Map<String, Object>> resourceList = resources.stream()
+                .map(r -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", r.getId());
+                    m.put("name", r.getResourceName());
+                    m.put("type", r.getResourceType().toUpperCase());
+                    m.put("resourceType", r.getResourceType());
+                    m.put("url", r.getFileUrl());
+                    m.put("description", r.getDescription());
+                    m.put("nodeIds", nodeIdsMap.getOrDefault(r.getId(), Collections.emptyList()));
+                    return m;
+                })
+                .collect(Collectors.toList());
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("node", nodeMap);
+        data.put("resources", resourceList);
+        return data;
+    }
 }
