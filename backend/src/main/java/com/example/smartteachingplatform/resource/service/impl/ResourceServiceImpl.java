@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import com.example.smartteachingplatform.course.entity.CourseMember;
 import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
-import com.example.smartteachingplatform.resource.service.MinioStorageService;
+import com.example.smartteachingplatform.common.storage.MinioStorageService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.multipart.MultipartFile;

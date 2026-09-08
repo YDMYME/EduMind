@@ -1,4 +1,4 @@
-package com.example.smartteachingplatform.resource.config;
+package com.example.smartteachingplatform.common.config;
 
 import io.minio.MinioClient;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,7 +16,7 @@ public class MinioConfig {
     private String secretKey;
 
     @Bean
-    public MinioClient minioCLient() {
+    public MinioClient minioClient() {
         return MinioClient.builder()
                 .endpoint(endpoint)
                 .credentials(accessKey, secretKey)

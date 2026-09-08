@@ -1,4 +1,4 @@
-package com.example.smartteachingplatform.resource.service;
+package com.example.smartteachingplatform.common.storage;
 
 
 import com.example.smartteachingplatform.common.exception.BusinessException;
@@ -40,7 +40,7 @@ public class MinioStorageService {
                     .contentType(file.getContentType())
                     .build());
 
-            return endpoint + "/" + "/" + objectKey;
+            return endpoint + "/" + bucket + "/" + objectKey;
         } catch (Exception e) {
             throw new BusinessException(500, "文件上传失败");
         }
