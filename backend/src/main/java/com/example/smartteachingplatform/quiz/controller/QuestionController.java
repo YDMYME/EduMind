@@ -43,4 +43,12 @@ public class QuestionController {
         Long id = questionService.updateQuestion(questionId, SecurityUtils.getUserId(), request);
         return Result.success(Map.of("questionId", id));
     }
+
+    /** 删除题目 — TEACHER（本课程） */
+    @DeleteMapping("/api/questions/{questionId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Void> deleteQuestion(@PathVariable Long questionId) {
+        questionService.deleteQuestion(questionId, SecurityUtils.getUserId());
+        return Result.success();
+    }
 }

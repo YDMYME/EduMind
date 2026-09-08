@@ -79,4 +79,12 @@ public interface QuestionMapper {
     int countByCourseIdAndCodeExclude(@Param("courseId") Long courseId,
                                       @Param("questionCode") String questionCode,
                                       @Param("excludeId") Long excludeId);
+
+    /** 检查题目是否被测验引用 */
+    @Select("SELECT COUNT(*) FROM quiz_questions WHERE question_id = #{questionId}")
+    int countQuizReferences(Long questionId);
+
+    /** 删除题目 */
+    @Delete("DELETE FROM questions WHERE id = #{id}")
+    int deleteById(Long id);
 }

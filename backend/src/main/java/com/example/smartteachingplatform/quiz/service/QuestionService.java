@@ -12,4 +12,7 @@ public interface QuestionService {
 
     /** 编辑题目 */
     Long updateQuestion(Long questionId, Long userId, QuestionCreateRequest request);
+
+    /** 删除题目 */
+    void deleteQuestion(Long questionId, Long userId);
 }

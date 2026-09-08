@@ -156,6 +156,27 @@ public class QuestionServiceImpl implements QuestionService{
         return questionId;
     }
 
+    @Override
+    @Transactional
+    public void deleteQuestion(Long questionId, Long userId) {
+        Question question = questionMapper.findById(questionId);
+        if (question == null) throw new BusinessException(404, "题目不存在");
+
+        Course course = courseMapper.findById(question.getCourseId());
+        if (course == null) throw new BusinessException(404, "课程不存在");
+        if (!course.getTeacherId().equals(userId)) throw new BusinessException(403, "仅本课程教师可删除题目");
+
+        // 被测验引用 → 409
+        if (questionMapper.countQuizReferences(questionId) > 0) {
+            throw new BusinessException(409, "题目已被测验引用，无法删除");
+        }
+
+        // 先删子表关联，再删主表（保证不留孤儿数据）
+        questionMapper.deleteKnowledgeByQuestionId(questionId);
+        questionMapper.deleteOptionsByQuestionId(questionId);
+        questionMapper.deleteById(questionId);
+    }
+
     // ────────── 私有工具 ──────────
 
     private void saveNodeBindings(Long questionId, List<Long> nodeIds) {
