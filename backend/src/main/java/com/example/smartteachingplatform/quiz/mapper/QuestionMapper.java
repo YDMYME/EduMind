@@ -87,4 +87,25 @@ public interface QuestionMapper {
     /** 删除题目 */
     @Delete("DELETE FROM questions WHERE id = #{id}")
     int deleteById(Long id);
+
+    /** 按题号查题目 */
+    @Select("SELECT * FROM questions WHERE course_id = #{courseId} AND question_code = #{questionCode}")
+    Question findByCourseIdAndCode(@Param("courseId") Long courseId, @Param("questionCode") String questionCode);
+
+    /** 绑定节点（幂等，重复绑定忽略） */
+    @Insert("INSERT INTO question_knowledge (question_id, knowledge_node_id) " +
+            "VALUES (#{questionId}, #{nodeId}) ON CONFLICT DO NOTHING")
+    int bindNodeIfAbsent(@Param("questionId") Long questionId, @Param("nodeId") Long nodeId);
+
+    /** 解绑节点 */
+    @Delete("DELETE FROM question_knowledge WHERE question_id = #{questionId} AND knowledge_node_id = #{nodeId}")
+    int unbindNode(@Param("questionId") Long questionId, @Param("nodeId") Long nodeId);
+
+    /** 更新题目的主节点冗余（knowledge_node_id） */
+    @Update("UPDATE questions SET knowledge_node_id = #{nodeId}, updated_at = NOW() WHERE id = #{questionId}")
+    int updateKnowledgeNodeId(@Param("questionId") Long questionId, @Param("nodeId") Long nodeId);
+
+    /** 查题目的第一个绑定节点 */
+    @Select("SELECT knowledge_node_id FROM question_knowledge WHERE question_id = #{questionId} ORDER BY id LIMIT 1")
+    Long findFirstNodeIdByQuestionId(Long questionId);
 }

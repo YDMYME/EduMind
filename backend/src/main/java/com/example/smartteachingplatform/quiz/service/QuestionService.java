@@ -15,4 +15,10 @@ public interface QuestionService {
 
     /** 删除题目 */
     void deleteQuestion(Long questionId, Long userId);
+
+    /** 绑定题目到节点 */
+    void bindNode(Long questionId, Long nodeId, Long userId);
+
+    /** 解绑题目与节点 */
+    void unbindNode(Long questionId, Long nodeId, Long userId);
 }

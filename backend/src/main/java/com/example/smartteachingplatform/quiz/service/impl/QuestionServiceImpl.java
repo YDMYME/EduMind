@@ -9,6 +9,8 @@ import com.example.smartteachingplatform.quiz.service.QuestionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.example.smartteachingplatform.course.entity.Course;
+import com.example.smartteachingplatform.graph.entity.KnowledgeNode;
+import com.example.smartteachingplatform.graph.mapper.KnowledgeNodeMapper;
 import com.example.smartteachingplatform.quiz.dto.QuestionCreateRequest;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
@@ -19,6 +21,7 @@ import java.util.stream.Collectors;
 public class QuestionServiceImpl implements QuestionService{
     private final QuestionMapper questionMapper;
     private final CourseMapper courseMapper;
+    private final KnowledgeNodeMapper knowledgeNodeMapper;
 
     @Override
     public QuestionListResponse listQuestions(Long courseId, Long userId, int page, int pageSize) {
@@ -175,6 +178,45 @@ public class QuestionServiceImpl implements QuestionService{
         questionMapper.deleteKnowledgeByQuestionId(questionId);
         questionMapper.deleteOptionsByQuestionId(questionId);
         questionMapper.deleteById(questionId);
+    }
+
+    @Override
+    public void bindNode(Long questionId, Long nodeId, Long userId) {
+        Question question = questionMapper.findById(questionId);
+        if (question == null) throw new BusinessException(404, "题目不存在");
+        assertTeacher(question.getCourseId(), userId);
+
+        KnowledgeNode node = knowledgeNodeMapper.findById(nodeId);
+        if (node == null || !node.getCourseId().equals(question.getCourseId())) {
+            throw new BusinessException(400, "知识点节点不存在或不属于本课程");
+        }
+        questionMapper.bindNodeIfAbsent(questionId, nodeId);
+
+        // 维护主节点冗余：题目还没有主节点时，把该节点设为主节点
+        if (question.getKnowledgeNodeId() == null) {
+            questionMapper.updateKnowledgeNodeId(questionId, nodeId);
+        }
+    }
+
+    @Override
+    public void unbindNode(Long questionId, Long nodeId, Long userId) {
+        Question question = questionMapper.findById(questionId);
+        if (question == null) throw new BusinessException(404, "题目不存在");
+        assertTeacher(question.getCourseId(), userId);
+
+        questionMapper.unbindNode(questionId, nodeId);
+
+        // 维护主节点冗余：解绑的是主节点时，重设为剩余的第一个节点
+        if (nodeId.equals(question.getKnowledgeNodeId())) {
+            questionMapper.updateKnowledgeNodeId(questionId,
+                    questionMapper.findFirstNodeIdByQuestionId(questionId));
+        }
+    }
+
+    private void assertTeacher(Long courseId, Long userId) {
+        Course course = courseMapper.findById(courseId);
+        if (course == null) throw new BusinessException(404, "课程不存在");
+        if (!course.getTeacherId().equals(userId)) throw new BusinessException(403, "仅本课程教师可操作");
     }
 
     // ────────── 私有工具 ──────────

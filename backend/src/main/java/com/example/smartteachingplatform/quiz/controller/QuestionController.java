@@ -2,13 +2,20 @@ package com.example.smartteachingplatform.quiz.controller;
 
 import com.example.smartteachingplatform.common.response.Result;
 import com.example.smartteachingplatform.common.util.SecurityUtils;
+import com.example.smartteachingplatform.quiz.dto.QuestionImportCommitResponse;
+import com.example.smartteachingplatform.quiz.dto.QuestionImportPreviewResponse;
 import com.example.smartteachingplatform.quiz.dto.QuestionListResponse;
+import com.example.smartteachingplatform.quiz.service.QuestionImportService;
 import com.example.smartteachingplatform.quiz.service.QuestionService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import com.example.smartteachingplatform.quiz.dto.QuestionCreateRequest;
 import jakarta.validation.Valid;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 import java.util.Map;
 
 @RestController
@@ -16,6 +23,7 @@ import java.util.Map;
 public class QuestionController {
 
     private final QuestionService questionService;
+    private final QuestionImportService questionImportService;
 
     /** 查询课程题库 — TEACHER（本课程） */
     @GetMapping("/api/courses/{courseId}/questions")
@@ -50,5 +58,45 @@ public class QuestionController {
     public Result<Void> deleteQuestion(@PathVariable Long questionId) {
         questionService.deleteQuestion(questionId, SecurityUtils.getUserId());
         return Result.success();
+    }
+
+    /** 绑定题目到节点 */
+    @PostMapping("/api/questions/{questionId}/nodes/{nodeId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Void> bindNode(@PathVariable Long questionId, @PathVariable Long nodeId) {
+        questionService.bindNode(questionId, nodeId, SecurityUtils.getUserId());
+        return Result.success();
+    }
+
+    /** 解绑题目与节点 */
+    @DeleteMapping("/api/questions/{questionId}/nodes/{nodeId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Void> unbindNode(@PathVariable Long questionId, @PathVariable Long nodeId) {
+        questionService.unbindNode(questionId, nodeId, SecurityUtils.getUserId());
+        return Result.success();
+    }
+
+    /** 题库模板下载 */
+    @GetMapping("/api/courses/{courseId}/questions/imports/template")
+    @PreAuthorize("hasRole('TEACHER')")
+    public void downloadTemplate(@PathVariable Long courseId, HttpServletResponse response) throws IOException {
+        questionImportService.downloadTemplate(courseId, SecurityUtils.getUserId(), response);
+    }
+
+    /** 导入预览 */
+    @PostMapping("/api/courses/{courseId}/questions/imports/preview")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<QuestionImportPreviewResponse> preview(@PathVariable Long courseId,
+                                                         @RequestParam("file") MultipartFile file,
+                                                         @RequestParam(value = "targetNodeId", required = false) Long targetNodeId) throws IOException {
+        return Result.success(questionImportService.preview(courseId, SecurityUtils.getUserId(), file, targetNodeId));
+    }
+
+    /** 导入提交 */
+    @PostMapping("/api/courses/{courseId}/questions/imports/{importToken}/commit")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<QuestionImportCommitResponse> commit(@PathVariable Long courseId,
+                                                       @PathVariable String importToken) {
+        return Result.success(questionImportService.commit(courseId, importToken, SecurityUtils.getUserId()));
     }
 }
