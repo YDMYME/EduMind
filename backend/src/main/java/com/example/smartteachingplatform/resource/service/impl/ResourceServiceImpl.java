@@ -14,6 +14,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import com.example.smartteachingplatform.course.entity.CourseMember;
+import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +27,7 @@ public class ResourceServiceImpl implements ResourceService {
 
     private final ResourceMapper resourceMapper;
     private final KnowledgeNodeMapper knowledgeNodeMapper;
+    private final CourseMemberMapper courseMemberMapper;
 
     @Override
     @Transactional
@@ -96,5 +103,49 @@ public class ResourceServiceImpl implements ResourceService {
         data.put("quizzes", quizList);
 
         return data;
+    }
+
+    @Override
+    public Map<String, Object> listResources(Long courseId, Long userId, int page, int pageSize) {
+        CourseMember member = courseMemberMapper.findByCourseIdAndUserId(courseId, userId);
+        if (member == null) {
+            throw new BusinessException(403, "你不是该课程的成员");
+        }
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+        int total = resourceMapper.countByCourseId(courseId);
+        int offset = (page - 1) * pageSize;
+        List<Resource> resources = resourceMapper.findResourcesByCourseId(courseId, offset, pageSize);
+
+        // 批量查每个资源关联的节点 id
+        List<Long> ids = resources.stream().map(Resource::getId).collect(Collectors.toList());
+        Map<Long, List<Long>> nodeIdsMap = new HashMap<>();
+        if (!ids.isEmpty()) {
+            for (Map<String, Object> row : resourceMapper.findNodeIdsByResourceIds(ids)) {
+                Long rid = ((Number) row.get("resource_id")).longValue();
+                Long nid = ((Number) row.get("knowledge_node_id")).longValue();
+                nodeIdsMap.computeIfAbsent(rid, k -> new ArrayList<>()).add(nid);
+            }
+        }
+
+        List<Map<String, Object>> items = resources.stream().map(r -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", r.getId());
+            m.put("name", r.getResourceName());
+            m.put("resourceType", r.getResourceType());
+            m.put("type", r.getResourceType().toUpperCase());
+            m.put("url", r.getFileUrl());
+            m.put("description", r.getDescription());
+            m.put("nodeIds", nodeIdsMap.getOrDefault(r.getId(), Collections.emptyList()));
+            return m;
+        }).collect(Collectors.toList());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("items", items);
+        result.put("total", total);
+        result.put("page", page);
+        result.put("pageSize", pageSize);
+        return result;
     }
 }

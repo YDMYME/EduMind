@@ -30,4 +30,13 @@ public class ResourceController {
                               @PathVariable Long nodeId) {
         return Result.success(resourceService.getLearning(courseId, nodeId));
     }
+
+    @GetMapping("/{courseId}/resources")
+    @PreAuthorize("isAuthenticated()")
+    public Result<Map<String, Object>> listResources(@PathVariable Long courseId,
+                                                     @RequestParam(defaultValue = "1") int page,
+                                                     @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(resourceService.listResources(
+                courseId, SecurityUtils.getUserId(), page, pageSize));
+    }
 }
