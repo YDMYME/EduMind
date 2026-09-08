@@ -8,7 +8,9 @@ import com.example.smartteachingplatform.quiz.mapper.QuestionMapper;
 import com.example.smartteachingplatform.quiz.service.QuestionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import com.example.smartteachingplatform.course.entity.Course;
+import com.example.smartteachingplatform.quiz.dto.QuestionCreateRequest;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -87,6 +89,131 @@ public class QuestionServiceImpl implements QuestionService{
         resp.setPage(page);
         resp.setPageSize(pageSize);
         return resp;
+    }
+
+
+    @Override
+    @Transactional
+    public Long createQuestion(Long courseId, Long userId, QuestionCreateRequest request) {
+        Course course = courseMapper.findById(courseId);
+        if (course == null) throw new BusinessException(404, "课程不存在");
+        if (!course.getTeacherId().equals(userId)) throw new BusinessException(403, "仅本课程教师可创建题目");
+
+        String questionCode = resolveQuestionCode(courseId, course.getCourseCode(), request.getQuestionCode(), null);
+
+        Question q = new Question();
+        q.setCourseId(courseId);
+        q.setQuestionCode(questionCode);
+        q.setQuestionType(mapQuestionType(request.getType()));
+        q.setStem(request.getStem());
+        q.setAnswer(request.getAnswer());
+        q.setAnalysis(request.getAnalysis());
+        q.setDifficulty(request.getDifficulty() != null ? request.getDifficulty() : 1);
+
+        q.setKnowledgeNodeId(request.getNodeIds() != null && !request.getNodeIds().isEmpty()
+                ? request.getNodeIds().get(0) : null);
+        q.setCreatedBy(userId);
+        questionMapper.insert(q);
+
+        saveNodeBindings(q.getId(), request.getNodeIds());
+        saveOptions(q.getId(), request.getOptions());
+        return q.getId();
+    }
+
+    @Override
+    @Transactional
+    public Long updateQuestion(Long questionId, Long userId, QuestionCreateRequest request) {
+        Question existing = questionMapper.findById(questionId);
+        if (existing == null) throw new BusinessException(404, "题目不存在");
+
+        Course course = courseMapper.findById(existing.getCourseId());
+        if (course == null) throw new BusinessException(404, "课程不存在");
+        if (!course.getTeacherId().equals(userId)) throw new BusinessException(403, "仅本课程教师可编辑题目");
+
+
+        String questionCode = resolveQuestionCode(existing.getCourseId(), course.getCourseCode(),
+                request.getQuestionCode(), questionId);
+
+        Question q = new Question();
+        q.setId(questionId);
+        q.setQuestionCode(questionCode);
+        q.setQuestionType(mapQuestionType(request.getType()));
+        q.setStem(request.getStem());
+        q.setAnswer(request.getAnswer());
+        q.setAnalysis(request.getAnalysis());
+        q.setDifficulty(request.getDifficulty() != null ? request.getDifficulty() : existing.getDifficulty());
+        q.setKnowledgeNodeId(request.getNodeIds() != null && !request.getNodeIds().isEmpty()
+                ? request.getNodeIds().get(0) : null);
+        questionMapper.update(q);
+
+        // 重建知识点关联
+        questionMapper.deleteKnowledgeByQuestionId(questionId);
+        saveNodeBindings(questionId, request.getNodeIds());
+        // 重建选项
+        questionMapper.deleteOptionsByQuestionId(questionId);
+        saveOptions(questionId, request.getOptions());
+
+        return questionId;
+    }
+
+    // ────────── 私有工具 ──────────
+
+    private void saveNodeBindings(Long questionId, List<Long> nodeIds) {
+        if (nodeIds == null) return;
+        for (Long nodeId : nodeIds) {
+            questionMapper.bindKnowledgeNode(questionId, nodeId);
+        }
+    }
+
+    private void saveOptions(Long questionId, List<QuestionCreateRequest.OptionItem> options) {
+        if (options == null) return;
+        for (QuestionCreateRequest.OptionItem opt : options) {
+            QuestionOption o = new QuestionOption();
+            o.setQuestionId(questionId);
+            o.setOptionLabel(opt.getLabel());
+            o.setOptionContent(opt.getContent());
+            o.setIsCorrect(Boolean.TRUE.equals(opt.getIsCorrect()) ? 1 : 0);
+            questionMapper.insertOption(o);
+        }
+    }
+
+
+    private String resolveQuestionCode(Long courseId, String courseCode, String inputCode, Long excludeId) {
+        if (inputCode != null && !inputCode.isBlank()) {
+            int cnt = excludeId == null
+                    ? questionMapper.countByCourseIdAndCode(courseId, inputCode)
+                    : questionMapper.countByCourseIdAndCodeExclude(courseId, inputCode, excludeId);
+            if (cnt > 0) throw new BusinessException(400, "题号已存在");
+            return inputCode;
+        }
+        return generateQuestionCode(courseId, courseCode);
+    }
+
+    private String generateQuestionCode(Long courseId, String courseCode) {
+        String prefix = "Q-" + (courseCode == null || courseCode.isBlank()
+                ? "C" + courseId
+                : courseCode.toUpperCase());
+        int maxSeq = 0;
+        for (String code : questionMapper.findQuestionCodesByCourseId(courseId)) {
+            if (code == null || !code.startsWith(prefix + "-")) continue;
+            String tail = code.substring(code.lastIndexOf('-') + 1);
+            try {
+                maxSeq = Math.max(maxSeq, Integer.parseInt(tail));
+            } catch (NumberFormatException ignored) { }
+        }
+        return String.format("%s-%03d", prefix, maxSeq + 1);
+    }
+
+    private String mapQuestionType(String type) {
+        if (type == null) return "single";
+        return switch (type.toUpperCase()) {
+            case "SINGLE_CHOICE" -> "single";
+            case "MULTIPLE_CHOICE" -> "multiple";
+            case "TRUE_FALSE" -> "judge";
+            case "FILL_BLANK" -> "blank";
+            case "SHORT_ANSWER" -> "short_answer";
+            default -> type.toLowerCase();
+        };
     }
 
     /** DB 题型 → API 题型 */

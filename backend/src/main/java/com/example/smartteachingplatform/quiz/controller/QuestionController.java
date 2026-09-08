@@ -7,6 +7,9 @@ import com.example.smartteachingplatform.quiz.service.QuestionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.example.smartteachingplatform.quiz.dto.QuestionCreateRequest;
+import jakarta.validation.Valid;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -21,5 +24,23 @@ public class QuestionController {
                                                       @RequestParam(defaultValue = "1") int page,
                                                       @RequestParam(defaultValue = "20") int pageSize) {
         return Result.success(questionService.listQuestions(courseId, SecurityUtils.getUserId(), page, pageSize));
+    }
+
+    /** 创建题目 — TEACHER（本课程） */
+    @PostMapping("/api/courses/{courseId}/questions")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> createQuestion(@PathVariable Long courseId,
+                                                      @Valid @RequestBody QuestionCreateRequest request) {
+        Long questionId = questionService.createQuestion(courseId, SecurityUtils.getUserId(), request);
+        return Result.success(Map.of("questionId", questionId));
+    }
+
+    /** 编辑题目 — TEACHER（本课程） */
+    @PutMapping("/api/questions/{questionId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> updateQuestion(@PathVariable Long questionId,
+                                                      @Valid @RequestBody QuestionCreateRequest request) {
+        Long id = questionService.updateQuestion(questionId, SecurityUtils.getUserId(), request);
+        return Result.success(Map.of("questionId", id));
     }
 }

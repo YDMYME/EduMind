@@ -10,8 +10,10 @@ import java.util.Map;
 @Mapper
 public interface QuestionMapper {
 
-    @Insert("INSERT INTO questions (course_id, knowledge_node_id, question_type, stem, answer, analysis, difficulty, created_by, created_at, updated_at) " +
-            "VALUES (#{courseId}, #{knowledgeNodeId}, #{questionType}, #{stem}, #{answer}, #{analysis}, #{difficulty}, #{createdBy}, NOW(), NOW())")
+    @Insert("INSERT INTO questions (course_id, knowledge_node_id, question_code, question_type, stem, answer, analysis, " +
+            "difficulty, created_by, created_at, updated_at) " +
+            "VALUES (#{courseId}, #{knowledgeNodeId}, #{questionCode}, #{questionType}, #{stem}, #{answer}, #{analysis}," +
+            "#{difficulty}, #{createdBy}, NOW(), NOW())")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Question question);
 
@@ -44,4 +46,37 @@ public interface QuestionMapper {
 
     /** 批量查题目关联节点 id  */
     List<Map<String, Object>> findNodeIdsByQuestionIds(@Param("ids") List<Long> ids);
+
+    /** 绑定知识点 */
+    @Insert("INSERT INTO question_knowledge (question_id, knowledge_node_id) VALUES (#{questionId}, #{nodeId})")
+    int bindKnowledgeNode(@Param("questionId") Long questionId, @Param("nodeId") Long nodeId);
+
+    /** 更新题目 */
+    @Update("UPDATE questions SET question_code = #{questionCode}, question_type = #{questionType}, " +
+            "stem = #{stem}, answer = #{answer}, analysis = #{analysis}, difficulty = #{difficulty}, " +
+            "knowledge_node_id = #{knowledgeNodeId}, updated_at = NOW() WHERE id = #{id}")
+    int update(Question question);
+
+    /** 删除题目所有选项 */
+    @Delete("DELETE FROM question_options WHERE question_id = #{questionId}")
+    int deleteOptionsByQuestionId(Long questionId);
+
+    /** 删除题目所有知识点关联 */
+    @Delete("DELETE FROM question_knowledge WHERE question_id = #{questionId}")
+    int deleteKnowledgeByQuestionId(Long questionId);
+
+    /** 查课程下已用题号 */
+    @Select("SELECT question_code FROM questions WHERE course_id = #{courseId} AND question_code IS NOT NULL")
+    List<String> findQuestionCodesByCourseId(Long courseId);
+
+    /** 题号唯一校验 */
+    @Select("SELECT COUNT(*) FROM questions WHERE course_id = #{courseId} AND question_code = #{questionCode}")
+    int countByCourseIdAndCode(@Param("courseId") Long courseId, @Param("questionCode") String questionCode);
+
+    /** 题号唯一校验（ */
+    @Select("SELECT COUNT(*) FROM questions WHERE course_id = #{courseId} AND question_code = #{questionCode} AND id <>" +
+            "#{excludeId}")
+    int countByCourseIdAndCodeExclude(@Param("courseId") Long courseId,
+                                      @Param("questionCode") String questionCode,
+                                      @Param("excludeId") Long excludeId);
 }
