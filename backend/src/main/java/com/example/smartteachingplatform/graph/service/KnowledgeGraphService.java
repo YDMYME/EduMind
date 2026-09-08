@@ -1,5 +1,6 @@
 package com.example.smartteachingplatform.graph.service;
 
+import com.example.smartteachingplatform.graph.dto.EdgeRequest;
 import com.example.smartteachingplatform.graph.dto.NodeRequest;
 
 import java.util.Map;
@@ -19,4 +20,7 @@ public interface KnowledgeGraphService {
     Map<String, Object> updateNode(Long nodeId, Long teacherId, NodeRequest request);
 
     void deleteNode(Long nodeId, Long teacherId);
+
+    Map<String, Object> createEdge(Long courseId, Long teacherId, EdgeRequest request);
+    void deleteEdge(Long edgeId, Long teacherId);
 }

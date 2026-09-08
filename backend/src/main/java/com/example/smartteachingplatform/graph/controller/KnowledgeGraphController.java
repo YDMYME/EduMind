@@ -2,6 +2,7 @@ package com.example.smartteachingplatform.graph.controller;
 
 import com.example.smartteachingplatform.common.response.Result;
 import com.example.smartteachingplatform.common.util.SecurityUtils;
+import com.example.smartteachingplatform.graph.dto.EdgeRequest;
 import com.example.smartteachingplatform.graph.dto.NodeRequest;
 import com.example.smartteachingplatform.graph.service.KnowledgeGraphService;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +56,14 @@ public class KnowledgeGraphController {
     public Result<Map<String, Object>> createNode(@PathVariable Long courseId,
                                                   @RequestBody NodeRequest request) {
         return Result.success(knowledgeGraphService.createNode(
+                courseId, SecurityUtils.getUserId(), request));
+    }
+
+    @PostMapping("/{courseId}/edges")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> createEdge(@PathVariable Long courseId,
+                                                  @RequestBody EdgeRequest request) {
+        return Result.success(knowledgeGraphService.createEdge(
                 courseId, SecurityUtils.getUserId(), request));
     }
 }

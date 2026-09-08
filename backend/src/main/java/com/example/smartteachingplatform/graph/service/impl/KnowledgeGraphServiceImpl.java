@@ -10,9 +10,12 @@ import com.example.smartteachingplatform.graph.mapper.KnowledgeEdgeMapper;
 import com.example.smartteachingplatform.graph.mapper.KnowledgeNodeMapper;
 import com.example.smartteachingplatform.graph.service.KnowledgeGraphService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import com.example.smartteachingplatform.graph.dto.NodeRequest;
 import com.example.smartteachingplatform.course.mapper.CourseMapper;
+import com.example.smartteachingplatform.graph.dto.EdgeRequest;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -208,6 +211,57 @@ public class KnowledgeGraphServiceImpl implements KnowledgeGraphService {
         // 先删关联边（级联），再删节点
         knowledgeEdgeMapper.deleteEdgesByNodeId(nodeId);
         knowledgeNodeMapper.deleteById(nodeId);
+    }
+
+    @Override
+    public Map<String, Object> createEdge(Long courseId, Long teacherId, EdgeRequest request) {
+        assertCourseTeacher(courseId, teacherId);
+
+        if (request.getFromCode() == null || request.getFromCode().isBlank()) {
+            throw new BusinessException(400, "fromCode 不能为空");
+        }
+        if (request.getToCode() == null || request.getToCode().isBlank()) {
+            throw new BusinessException(400, "toCode 不能为空");
+        }
+        if (!"prerequisite".equals(request.getRelationType())
+                && !"dependency".equals(request.getRelationType())
+                && !"related".equals(request.getRelationType())) {
+            throw new BusinessException(400, "relationType 只能是 prerequisite/dependency/related");
+        }
+
+        KnowledgeNode from = knowledgeNodeMapper.findByCode(courseId, request.getFromCode());
+        KnowledgeNode to = knowledgeNodeMapper.findByCode(courseId, request.getToCode());
+        if (from == null || to == null) {
+            throw new BusinessException(400, "fromCode 或 toCode 对应的节点不存在");
+        }
+        if (from.getId().equals(to.getId())) {
+            throw new BusinessException(400, "fromCode 和 toCode 不能是同一节点");
+        }
+
+        KnowledgeEdge edge = new KnowledgeEdge();
+        edge.setCourseId(courseId);
+        edge.setSourceNodeId(from.getId());
+        edge.setTargetNodeId(to.getId());
+        edge.setRelationType(request.getRelationType());
+        edge.setWeight(new BigDecimal("1.00"));
+        try {
+            knowledgeEdgeMapper.insert(edge);
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException(409, "边已存在");
+        }
+
+        return Map.of("edgeId", edge.getId());
+    }
+
+    @Override
+    public void deleteEdge(Long edgeId, Long teacherId) {
+        KnowledgeEdge edge = knowledgeEdgeMapper.findById(edgeId);
+        if (edge == null) {
+            throw new BusinessException(404, "边不存在");
+        }
+        assertCourseTeacher(edge.getCourseId(), teacherId);
+
+        knowledgeEdgeMapper.deleteById(edgeId);
     }
 
     private Long resolveParentId(Long courseId, String parentCode) {

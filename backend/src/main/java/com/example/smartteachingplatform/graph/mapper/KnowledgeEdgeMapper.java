@@ -34,4 +34,10 @@ public interface KnowledgeEdgeMapper {
 
     @Delete("DELETE FROM knowledge_edges WHERE source_node_id = #{nodeId} OR target_node_id = #{nodeId}")
     int deleteEdgesByNodeId(@Param("nodeId") Long nodeId);
+
+    @Select("SELECT * FROM knowledge_edges WHERE id = #{id}")
+    KnowledgeEdge findById(@Param("id") Long id);
+
+    @Delete("DELETE FROM knowledge_edges WHERE id = #{id}")
+    int deleteById(@Param("id") Long id);
 }
