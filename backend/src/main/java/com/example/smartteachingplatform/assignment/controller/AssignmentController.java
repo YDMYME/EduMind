@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import com.example.smartteachingplatform.assignment.dto.AssignmentDetailResponse;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.List;
 @RestController
 @RequiredArgsConstructor
 public class AssignmentController {
@@ -70,5 +72,14 @@ public class AssignmentController {
                                                      @RequestParam(defaultValue = "1") int page,
                                                      @RequestParam(defaultValue = "20") int pageSize) {
         return Result.success(assignmentService.listStudentAssignmentsByCourse(SecurityUtils.getUserId(), courseId, page, pageSize));
+    }
+
+    @PostMapping("/api/assignments/{assignmentId}/submissions")
+    @PreAuthorize("hasRole('STUDENT')")
+    public Result<Map<String, Object>> submit(@PathVariable Long assignmentId,
+                                              @RequestParam(value = "content", required = false) String content,
+                                              @RequestParam(value = "files", required = false) List<MultipartFile> files)
+    {
+        return Result.success(assignmentService.submit(assignmentId, SecurityUtils.getUserId(), content, files));
     }
 }

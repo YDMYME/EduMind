@@ -25,6 +25,10 @@ import com.example.smartteachingplatform.assignment.dto.MySubmissionDto;
 import com.example.smartteachingplatform.assignment.entity.AssignmentSubmission;
 import com.example.smartteachingplatform.assignment.mapper.AssignmentSubmissionMapper;
 import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
+import com.example.smartteachingplatform.assignment.entity.SubmissionFile;
+import com.example.smartteachingplatform.common.storage.MinioStorageService;
+import org.springframework.web.multipart.MultipartFile;
+import java.time.LocalDateTime;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -35,6 +39,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     private final KnowledgeNodeMapper knowledgeNodeMapper;
     private final CourseMemberMapper courseMemberMapper;
     private final AssignmentSubmissionMapper submissionMapper;
+    private final MinioStorageService minioStorageService;
 
     @Override
     @Transactional
@@ -162,7 +167,55 @@ public class AssignmentServiceImpl implements AssignmentService {
         return resp;
     }
 
+    @Override
+    @Transactional
+    public Map<String, Object> submit(Long assignmentId, Long studentId, String content, List<MultipartFile> files) {
+        Assignment a = assignmentMapper.findById(assignmentId);
+        if (a == null) throw new BusinessException(404, "作业不存在");
+        assertStudentInCourse(a.getCourseId(), studentId);
+        if (!"published".equals(a.getStatus())) throw new BusinessException(409, "作业未发布或已关闭");
+        if (a.getEndTime() != null && LocalDateTime.now().isAfter(a.getEndTime())) {
+            throw new BusinessException(409, "已过截止时间");
+        }
 
+        boolean hasContent = content != null && !content.isBlank();
+        boolean hasFiles = files != null && !files.isEmpty();
+        String type = a.getSubmissionType();
+        if ("TEXT".equals(type) && !hasContent) throw new BusinessException(400, "该作业需填写文本内容");
+        if ("FILE".equals(type) && !hasFiles) throw new BusinessException(400, "该作业需上传附件");
+        if ("TEXT_AND_FILE".equals(type) && !hasContent && !hasFiles) throw new BusinessException(400,
+                "需填写内容或上传附件");
+
+        AssignmentSubmission existing = submissionMapper.findByAssignmentAndStudent(assignmentId, studentId);
+        Long submissionId;
+        if (existing != null) {
+            submissionMapper.updateContent(existing.getId(), content);
+            submissionMapper.deleteFiles(existing.getId());
+            submissionId = existing.getId();
+        } else {
+            AssignmentSubmission s = new AssignmentSubmission();
+            s.setAssignmentId(assignmentId);
+            s.setStudentId(studentId);
+            s.setContent(content);
+            submissionMapper.insert(s);
+            submissionId = s.getId();
+        }
+
+        if (hasFiles) {
+            for (MultipartFile f : files) {
+                if (f == null || f.isEmpty()) continue;
+                String url = minioStorageService.upload(f);
+                SubmissionFile sf = new SubmissionFile();
+                sf.setSubmissionId(submissionId);
+                sf.setFileName(f.getOriginalFilename());
+                sf.setFileUrl(url);
+                sf.setFileSize(f.getSize());
+                submissionMapper.insertFile(sf);
+            }
+        }
+
+        return Map.of("submissionId", submissionId, "status", "submitted", "submittedAt", LocalDateTime.now());
+    }
 
     // ────────── 工具方法 ──────────
 
