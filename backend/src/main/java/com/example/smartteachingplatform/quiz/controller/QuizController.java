@@ -96,6 +96,12 @@ public class QuizController {
         return Result.success(quizService.listQuizzes(courseId, SecurityUtils.getUserId(), page, pageSize));
     }
 
+    @GetMapping("/api/quiz-submissions/{submissionId}")
+    @PreAuthorize("hasAnyRole('TEACHER','STUDENT')")
+    public Result<SubmissionDetailResponse> getSubmission(@PathVariable Long submissionId) {
+        return Result.success(quizService.getSubmissionDetail(submissionId, SecurityUtils.getUserId()));
+    }
+
     private Long getCurrentUserId() {
         return (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }

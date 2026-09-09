@@ -377,6 +377,65 @@ public class QuizServiceImpl implements QuizService {
     }
 
     @Override
+    public SubmissionDetailResponse getSubmissionDetail(Long submissionId, Long userId) {
+        QuizSubmission submission = submissionMapper.findSubmissionById(submissionId);
+        if (submission == null) {
+            throw new BusinessException(404, "作答记录不存在");
+        }
+        Quiz quiz = quizMapper.findById(submission.getQuizId());
+        if (quiz == null) {
+            throw new BusinessException(404, "测验不存在");
+        }
+
+        Long teacherId = courseMapper.findTeacherIdByCourseId(quiz.getCourseId());
+        boolean isTeacher = userId.equals(teacherId);
+        boolean isOwner = submission.getStudentId().equals(userId);
+        if (!isTeacher && !isOwner) {
+            throw new BusinessException(403, "无权限查看该作答记录");
+        }
+
+        SubmissionDetailResponse resp = new SubmissionDetailResponse();
+        resp.setSubmissionId(submission.getId());
+        resp.setScore(submission.getTotalScore());
+        resp.setTotalScore(quiz.getTotalScore());
+        resp.setSubmittedAt(submission.getSubmitTime());
+
+        List<SubmissionDetailResponse.AnswerItem> items = new ArrayList<>();
+        for (QuizAnswer ans : submissionMapper.findAnswersBySubmissionId(submissionId)) {
+            Question q = questionMapper.findById(ans.getQuestionId());
+            if (q == null) continue;
+
+            SubmissionDetailResponse.AnswerItem item = new SubmissionDetailResponse.AnswerItem();
+            item.setQuestionId(q.getId());
+            item.setType(toApiQuestionType(q.getQuestionType()));
+            item.setStem(q.getStem());
+            item.setStudentAnswer(ans.getStudentAnswer());
+
+            List<SubmissionDetailResponse.OptionItem> opts = new ArrayList<>();
+            for (QuestionOption o : questionMapper.findOptionsByQuestionId(q.getId())) {
+                SubmissionDetailResponse.OptionItem oi = new SubmissionDetailResponse.OptionItem();
+                oi.setLabel(o.getOptionLabel());
+                oi.setContent(o.getOptionContent());
+                if (isTeacher) {
+                    oi.setIsCorrect(o.getIsCorrect() != null && o.getIsCorrect() == 1);
+                }
+                opts.add(oi);
+            }
+            item.setOptions(opts);
+
+            if (isTeacher) {
+                item.setCorrectAnswer(q.getAnswer());
+                item.setIsCorrect(ans.getIsCorrect() != null && ans.getIsCorrect() == 1);
+                item.setScore(ans.getScore());
+                item.setAnalysis(q.getAnalysis());
+            }
+            items.add(item);
+        }
+        resp.setAnswers(items);
+        return resp;
+    }
+
+    @Override
     public Map<String, Object> listQuizzes(Long courseId, Long userId, int page, int pageSize) {
         Long teacherId = courseMapper.findTeacherIdByCourseId(courseId);
         boolean isTeacher = userId.equals(teacherId);

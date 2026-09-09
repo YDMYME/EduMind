@@ -27,4 +27,6 @@ public interface QuizService {
     String publishQuiz(Long quizId, Long teacherId);
 
     String closeQuiz(Long quizId, Long teacherId);
+
+    SubmissionDetailResponse getSubmissionDetail(Long submissionId, Long userId);
 }
