@@ -47,4 +47,15 @@ public interface QuizMapper {
             "JOIN questions q ON qq.question_id = q.id " +
             "WHERE qq.quiz_id = #{quizId} ORDER BY qq.sort_order")
     List<QuizQuestionRow> findQuizQuestionRows(Long quizId);
+
+    @Update("UPDATE quizzes SET title = #{title}, description = #{description}, " +
+            "start_time = #{startTime}, end_time = #{endTime}, total_score = #{totalScore}, " +
+            "attempt_limit = #{attemptLimit}, updated_at = NOW() WHERE id = #{id}")
+    int update(Quiz quiz);
+
+    @Delete("DELETE FROM quiz_questions WHERE quiz_id = #{quizId}")
+    int deleteQuizQuestions(Long quizId);
+
+    @Delete("DELETE FROM quizzes WHERE id = #{quizId}")
+    int deleteById(Long quizId);
 }

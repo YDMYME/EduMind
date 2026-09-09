@@ -19,4 +19,8 @@ public interface QuizService {
     SubmitResultResponse submitQuiz(Long quizId, Long studentId, SubmitRequest request);
 
     Map<String, Object> listQuizzes(Long courseId, Long userId, int page, int pageSize);
+
+    Long updateQuiz(Long quizId, Long teacherId, QuizCreateRequest request);
+
+    void deleteQuiz(Long quizId, Long teacherId);
 }
