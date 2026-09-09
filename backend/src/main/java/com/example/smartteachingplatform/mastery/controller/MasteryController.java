@@ -22,4 +22,11 @@ public class MasteryController {
     public Result<Map<String, Object>> getMyMastery(@PathVariable Long courseId) {
         return Result.success(masteryService.getMyMastery(courseId, SecurityUtils.getUserId()));
     }
+
+    @GetMapping("/api/courses/{courseId}/mastery/students/{studentId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> getStudentMastery(@PathVariable Long courseId,
+                                                         @PathVariable Long studentId) {
+        return Result.success(masteryService.getStudentMastery(courseId, studentId, SecurityUtils.getUserId()));
+    }
 }
