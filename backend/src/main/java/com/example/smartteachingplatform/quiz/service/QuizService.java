@@ -23,4 +23,8 @@ public interface QuizService {
     Long updateQuiz(Long quizId, Long teacherId, QuizCreateRequest request);
 
     void deleteQuiz(Long quizId, Long teacherId);
+
+    String publishQuiz(Long quizId, Long teacherId);
+
+    String closeQuiz(Long quizId, Long teacherId);
 }

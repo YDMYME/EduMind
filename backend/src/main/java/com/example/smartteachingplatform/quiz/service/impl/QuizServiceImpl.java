@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -131,6 +132,42 @@ public class QuizServiceImpl implements QuizService {
         }
         quizMapper.deleteQuizQuestions(quizId);
         quizMapper.deleteById(quizId);
+    }
+
+    @Override
+    @Transactional
+    public String publishQuiz(Long quizId, Long teacherId) {
+        Quiz quiz = quizMapper.findById(quizId);
+        if (quiz == null) {
+            throw new BusinessException(404, "测验不存在");
+        }
+        assertCourseTeacher(quiz.getCourseId(), teacherId);
+        if (!"draft".equals(quiz.getStatus())) {
+            throw new BusinessException(409, "仅草稿状态可发布");
+        }
+        if (quizMapper.countQuestionsByQuizId(quizId) == 0) {
+            throw new BusinessException(400, "测验没有题目，无法发布");
+        }
+        if (quiz.getEndTime() != null && quiz.getEndTime().isBefore(LocalDateTime.now())) {
+            throw new BusinessException(400, "结束时间已过期，无法发布");
+        }
+        quizMapper.updateStatus(quizId, "published");
+        return "published";
+    }
+
+    @Override
+    @Transactional
+    public String closeQuiz(Long quizId, Long teacherId) {
+        Quiz quiz = quizMapper.findById(quizId);
+        if (quiz == null) {
+            throw new BusinessException(404, "测验不存在");
+        }
+        assertCourseTeacher(quiz.getCourseId(), teacherId);
+        if (!"published".equals(quiz.getStatus())) {
+            throw new BusinessException(409, "仅已发布状态可关闭");
+        }
+        quizMapper.updateStatus(quizId, "closed");
+        return "closed";
     }
 
     // ────────── 获取测验详情（不含答案） ──────────

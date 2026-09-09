@@ -58,4 +58,10 @@ public interface QuizMapper {
 
     @Delete("DELETE FROM quizzes WHERE id = #{quizId}")
     int deleteById(Long quizId);
+
+    @Update("UPDATE quizzes SET status = #{status}, updated_at = NOW() WHERE id = #{id}")
+    int updateStatus(@Param("id") Long id, @Param("status") String status);
+
+    @Select("SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = #{quizId}")
+    int countQuestionsByQuizId(Long quizId);
 }

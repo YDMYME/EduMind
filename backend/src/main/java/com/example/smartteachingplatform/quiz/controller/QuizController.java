@@ -59,6 +59,20 @@ public class QuizController {
         return Result.success(null);
     }
 
+    @PostMapping("/api/quizzes/{quizId}/publish")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> publishQuiz(@PathVariable Long quizId) {
+        String status = quizService.publishQuiz(quizId, SecurityUtils.getUserId());
+        return Result.success(Map.of("quizId", quizId, "status", status));
+    }
+
+    @PostMapping("/api/quizzes/{quizId}/close")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> closeQuiz(@PathVariable Long quizId) {
+        String status = quizService.closeQuiz(quizId, SecurityUtils.getUserId());
+        return Result.success(Map.of("quizId", quizId, "status", status));
+    }
+
     /** 获取测验详情（不含答案） — STUDENT */
     @GetMapping("/api/quizzes/{quizId}")
     @PreAuthorize("hasAnyRole('TEACHER','STUDENT')")
