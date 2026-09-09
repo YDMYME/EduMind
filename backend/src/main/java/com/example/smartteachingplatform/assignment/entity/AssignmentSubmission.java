@@ -20,4 +20,7 @@ public class AssignmentSubmission {
     private String feedback;
     private LocalDateTime submittedAt;
     private LocalDateTime gradedAt;
+
+    /** 学生姓名，列表查询 JOIN users */
+    private String studentName;
 }

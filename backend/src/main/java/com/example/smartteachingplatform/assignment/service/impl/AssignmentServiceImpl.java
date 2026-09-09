@@ -29,6 +29,13 @@ import com.example.smartteachingplatform.assignment.entity.SubmissionFile;
 import com.example.smartteachingplatform.common.storage.MinioStorageService;
 import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDateTime;
+import com.example.smartteachingplatform.assignment.dto.SubmissionItemResponse;
+import com.example.smartteachingplatform.assignment.dto.SubmissionFileDto;
+import com.example.smartteachingplatform.assignment.dto.GradeRequest;
+import com.example.smartteachingplatform.assignment.dto.GradeResponse;
+import com.example.smartteachingplatform.quiz.entity.KnowledgeMastery;
+import java.math.RoundingMode;
+import java.util.ArrayList;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -215,6 +222,138 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
 
         return Map.of("submissionId", submissionId, "status", "submitted", "submittedAt", LocalDateTime.now());
+    }
+
+    @Override
+    public Map<String, Object> listSubmissions(Long assignmentId, Long teacherId, int page, int pageSize) {
+        Assignment a = assignmentMapper.findById(assignmentId);
+        if (a == null) throw new BusinessException(404, "作业不存在");
+        assertTeacher(a.getCourseId(), teacherId);
+
+        int offset = (page - 1) * pageSize;
+        List<AssignmentSubmission> list = submissionMapper.findPageByAssignment(assignmentId, a.getCourseId(), offset, pageSize);
+        long total = submissionMapper.countStudentsByCourse(a.getCourseId());
+
+        List<SubmissionItemResponse> items = list.stream()
+                .map(this::toSubmissionItem)
+                .collect(Collectors.toList());
+        return buildPage(items, total, page, pageSize);
+    }
+
+    @Override
+    public SubmissionItemResponse getSubmission(Long assignmentId, Long submissionId, Long teacherId) {
+        Assignment a = assignmentMapper.findById(assignmentId);
+        if (a == null) throw new BusinessException(404, "作业不存在");
+        assertTeacher(a.getCourseId(), teacherId);
+
+        AssignmentSubmission sub = submissionMapper.findById(submissionId);
+        if (sub == null || !sub.getAssignmentId().equals(assignmentId)) {
+            throw new BusinessException(404, "提交记录不存在");
+        }
+        return toSubmissionItem(sub);
+    }
+
+    @Override
+    @Transactional
+    public GradeResponse grade(Long submissionId, Long teacherId, GradeRequest req) {
+        AssignmentSubmission sub = submissionMapper.findById(submissionId);
+        if (sub == null) throw new BusinessException(404, "提交记录不存在");
+        Assignment a = assignmentMapper.findById(sub.getAssignmentId());
+        if (a == null) throw new BusinessException(404, "作业不存在");
+        assertTeacher(a.getCourseId(), teacherId);
+
+        if (req.getScore() == null
+                || req.getScore().compareTo(BigDecimal.ZERO) < 0
+                || req.getScore().compareTo(a.getTotalScore()) > 0) {
+            throw new BusinessException(400, "分数超出范围 0 ~ " + a.getTotalScore());
+        }
+
+        submissionMapper.grade(submissionId, req.getScore(), req.getFeedback());
+
+        List<Long> nodeIds = assignmentMapper.findNodeIds(a.getId());
+        BigDecimal rate = a.getTotalScore().compareTo(BigDecimal.ZERO) > 0
+                ? req.getScore().divide(a.getTotalScore(), 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+                : BigDecimal.ZERO;
+
+        List<GradeResponse.MasteryUpdate> updates = new ArrayList<>();
+        for (Long nodeId : nodeIds) {
+            KnowledgeMastery old = submissionMapper.findMastery(a.getCourseId(), sub.getStudentId(), nodeId);
+            BigDecimal oldScore = old != null ? old.getMasteryScore() : BigDecimal.ZERO;
+            BigDecimal newScore = rate.multiply(BigDecimal.valueOf(0.6))
+                    .add(oldScore.multiply(BigDecimal.valueOf(0.4)))
+                    .setScale(2, RoundingMode.HALF_UP);
+            if (newScore.compareTo(BigDecimal.valueOf(100)) > 0) newScore = BigDecimal.valueOf(100);
+
+            KnowledgeMastery m = new KnowledgeMastery();
+            m.setCourseId(a.getCourseId());
+            m.setStudentId(sub.getStudentId());
+            m.setKnowledgeNodeId(nodeId);
+            m.setMasteryScore(newScore);
+            m.setMasteryLevel(calcLevel(newScore));
+            submissionMapper.upsertMastery(m);
+
+            Long masteryId = submissionMapper.findMastery(a.getCourseId(), sub.getStudentId(), nodeId).getId();
+            submissionMapper.insertMasteryHistory(masteryId, a.getCourseId(), sub.getStudentId(),
+                    nodeId, oldScore, newScore, "assignment_grade");
+            submissionMapper.insertLearningLog(a.getCourseId(), sub.getStudentId(), nodeId, submissionId);
+
+            KnowledgeNode node = knowledgeNodeMapper.findById(nodeId);
+            updates.add(buildUpdate(nodeId, node, oldScore, newScore));
+        }
+
+        GradeResponse resp = new GradeResponse();
+        resp.setSubmissionId(submissionId);
+        resp.setStatus("graded");
+        resp.setScore(req.getScore());
+        resp.setMasteryUpdates(updates);
+
+        log.info("作业评分成功: submissionId={}, score={}", submissionId, req.getScore());
+        return resp;
+    }
+
+    private SubmissionItemResponse toSubmissionItem(AssignmentSubmission s) {
+        SubmissionItemResponse item = new SubmissionItemResponse();
+        item.setSubmissionId(s.getId());
+        item.setStudentId(s.getStudentId());
+        item.setStudentName(s.getStudentName());
+        item.setContent(s.getContent());
+        item.setStatus(s.getId() == null ? "not_submitted" : s.getStatus());
+        item.setScore(s.getScore());
+        item.setFeedback(s.getFeedback());
+        item.setSubmittedAt(s.getSubmittedAt());
+        item.setGradedAt(s.getGradedAt());
+
+        List<SubmissionFileDto> files = s.getId() == null ? List.of()
+                : submissionMapper.findFiles(s.getId()).stream()
+                .map(f -> {
+                    SubmissionFileDto d = new SubmissionFileDto();
+                    d.setFileId(f.getId());
+                    d.setFileName(f.getFileName());
+                    d.setFileUrl(f.getFileUrl());
+                    d.setFileSize(f.getFileSize());
+                    return d;
+                }).collect(Collectors.toList());
+        item.setFiles(files);
+        return item;
+    }
+
+    private String calcLevel(BigDecimal score) {
+        int s = score.intValue();
+        if (s == 0) return "gray";
+        if (s < 60) return "red";
+        if (s < 80) return "yellow";
+        return "green";
+    }
+
+    private GradeResponse.MasteryUpdate buildUpdate(Long nodeId, KnowledgeNode node,
+                                                    BigDecimal oldScore, BigDecimal newScore) {
+        GradeResponse.MasteryUpdate mu = new GradeResponse.MasteryUpdate();
+        mu.setNodeId(nodeId);
+        mu.setNodeName(node != null ? node.getNodeName() : "未知");
+        mu.setOldScore(oldScore);
+        mu.setNewScore(newScore);
+        mu.setDelta(newScore.subtract(oldScore));
+        return mu;
     }
 
     // ────────── 工具方法 ──────────

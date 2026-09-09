@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import com.example.smartteachingplatform.assignment.dto.AssignmentDetailResponse;
+import com.example.smartteachingplatform.assignment.dto.SubmissionItemResponse;
+import com.example.smartteachingplatform.assignment.dto.GradeRequest;
+import com.example.smartteachingplatform.assignment.dto.GradeResponse;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 @RestController
@@ -81,5 +84,27 @@ public class AssignmentController {
                                               @RequestParam(value = "files", required = false) List<MultipartFile> files)
     {
         return Result.success(assignmentService.submit(assignmentId, SecurityUtils.getUserId(), content, files));
+    }
+
+    @GetMapping("/api/assignments/{assignmentId}/submissions")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<Map<String, Object>> submissions(@PathVariable Long assignmentId,
+                                                   @RequestParam(defaultValue = "1") int page,
+                                                   @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(assignmentService.listSubmissions(assignmentId, SecurityUtils.getUserId(), page, pageSize));
+    }
+
+    @GetMapping("/api/assignments/{assignmentId}/submissions/{submissionId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<SubmissionItemResponse> submission(@PathVariable Long assignmentId,
+                                                     @PathVariable Long submissionId) {
+        return Result.success(assignmentService.getSubmission(assignmentId, submissionId, SecurityUtils.getUserId()));
+    }
+
+    @PostMapping("/api/submissions/{submissionId}/grade")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<GradeResponse> grade(@PathVariable Long submissionId,
+                                       @Valid @RequestBody GradeRequest req) {
+        return Result.success(assignmentService.grade(submissionId, SecurityUtils.getUserId(), req));
     }
 }
