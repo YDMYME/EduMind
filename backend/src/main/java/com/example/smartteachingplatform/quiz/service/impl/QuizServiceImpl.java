@@ -96,40 +96,50 @@ public class QuizServiceImpl implements QuizService {
     // ────────── 获取测验详情（不含答案） ──────────
 
     @Override
-    public QuizDetailResponse getQuizDetail(Long quizId) {
+    public QuizDetailResponse getQuizDetail(Long quizId, Long userId) {
         Quiz quiz = quizMapper.findById(quizId);
-        if (quiz == null) throw new RuntimeException("测验不存在");
+        if (quiz == null) {
+            throw new BusinessException(404, "测验不存在");
+        }
+        Long courseId = quiz.getCourseId();
+        Long teacherId = courseMapper.findTeacherIdByCourseId(courseId);
+        boolean isTeacher = userId.equals(teacherId);
+        if (!isTeacher) {
+            CourseMember member = courseMemberMapper.findByCourseIdAndUserId(courseId, userId);
+            if (member == null) {
+                throw new BusinessException(403, "无权限访问该测验");
+            }
+            if (!"published".equals(quiz.getStatus())) {
+                throw new BusinessException(404, "测验不存在");
+            }
+        }
 
         QuizDetailResponse resp = new QuizDetailResponse();
         resp.setQuizId(quiz.getId());
-        resp.setName(quiz.getTitle());
+        resp.setTitle(quiz.getTitle());
         resp.setDescription(quiz.getDescription());
-        resp.setTotalScore(quiz.getTotalScore());
-        resp.setDeadline(quiz.getEndTime());
+        resp.setStartTime(quiz.getStartTime());
+        resp.setEndTime(quiz.getEndTime());
+        resp.setAttemptLimit(quiz.getAttemptLimit());
+        resp.setStatus(quiz.getStatus());
 
-        List<Long> questionIds = quizMapper.findQuestionIdsByQuizId(quizId);
         List<QuizDetailResponse.QuestionItem> items = new ArrayList<>();
-        for (Long qid : questionIds) {
-            Question q = questionMapper.findById(qid);
-            if (q == null) continue;
-
+        for (QuizQuestionRow row : quizMapper.findQuizQuestionRows(quizId)) {
             QuizDetailResponse.QuestionItem item = new QuizDetailResponse.QuestionItem();
-            item.setQuestionId(q.getId());
-            item.setType(q.getQuestionType());
-            item.setContent(q.getStem());
-            BigDecimal score = quizMapper.findQuestionScore(quizId, qid);
-            item.setScore(score != null ? score : BigDecimal.ZERO);
+            item.setQuestionId(row.getQuestionId());
+            item.setType(toApiQuestionType(row.getQuestionType()));
+            item.setStem(row.getStem());
+            item.setScore(row.getScore());
+            item.setSortOrder(row.getSortOrder());
 
-            // 选项不含 is_correct
-            List<QuestionOption> options = questionMapper.findOptionsByQuestionId(qid);
-            if (!options.isEmpty()) {
-                item.setOptions(options.stream().map(o -> {
-                    QuizDetailResponse.OptionItem oi = new QuizDetailResponse.OptionItem();
-                    oi.setLabel(o.getOptionLabel());
-                    oi.setText(o.getOptionContent());
-                    return oi;
-                }).collect(Collectors.toList()));
+            List<QuizDetailResponse.OptionItem> opts = new ArrayList<>();
+            for (QuestionOption o : questionMapper.findOptionsByQuestionId(row.getQuestionId())) {
+                QuizDetailResponse.OptionItem oi = new QuizDetailResponse.OptionItem();
+                oi.setLabel(o.getOptionLabel());
+                oi.setContent(o.getOptionContent());
+                opts.add(oi);
             }
+            item.setOptions(opts);
             items.add(item);
         }
         resp.setQuestions(items);
@@ -402,5 +412,17 @@ public class QuizServiceImpl implements QuizService {
         GradingResult(boolean isCorrect, BigDecimal earnedScore) {
             this.isCorrect = isCorrect; this.earnedScore = earnedScore;
         }
+    }
+
+    private String toApiQuestionType(String dbType) {
+        if (dbType == null) return "SHORT_ANSWER";
+        return switch (dbType) {
+            case "single" -> "SINGLE_CHOICE";
+            case "multiple" -> "MULTIPLE_CHOICE";
+            case "judge" -> "TRUE_FALSE";
+            case "blank" -> "FILL_BLANK";
+            case "short_answer" -> "SHORT_ANSWER";
+            default -> dbType.toUpperCase();
+        };
     }
 }

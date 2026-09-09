@@ -1,6 +1,7 @@
 package com.example.smartteachingplatform.quiz.mapper;
 
 import com.example.smartteachingplatform.quiz.dto.QuizListItemResponse;
+import com.example.smartteachingplatform.quiz.dto.QuizQuestionRow;
 import com.example.smartteachingplatform.quiz.entity.Quiz;
 import org.apache.ibatis.annotations.*;
 
@@ -40,4 +41,10 @@ public interface QuizMapper {
 
     long countByCourseId(@Param("courseId") Long courseId,
                          @Param("studentOnly") boolean studentOnly);
+
+    @Select("SELECT qq.question_id, qq.score, qq.sort_order, q.question_type, q.stem " +
+            "FROM quiz_questions qq " +
+            "JOIN questions q ON qq.question_id = q.id " +
+            "WHERE qq.quiz_id = #{quizId} ORDER BY qq.sort_order")
+    List<QuizQuestionRow> findQuizQuestionRows(Long quizId);
 }

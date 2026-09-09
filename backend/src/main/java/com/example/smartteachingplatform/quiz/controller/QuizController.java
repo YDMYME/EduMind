@@ -52,14 +52,9 @@ public class QuizController {
 
     /** 获取测验详情（不含答案） — STUDENT */
     @GetMapping("/api/quizzes/{quizId}")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('TEACHER','STUDENT')")
     public Result<QuizDetailResponse> getQuiz(@PathVariable Long quizId) {
-        try {
-            return Result.success(quizService.getQuizDetail(quizId));
-        } catch (Exception e) {
-            log.error("获取测验失败: {}", e.getMessage());
-            return Result.error("测验不存在");
-        }
+        return Result.success(quizService.getQuizDetail(quizId, SecurityUtils.getUserId()));
     }
 
     /** 提交测验 — STUDENT */
