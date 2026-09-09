@@ -3,6 +3,8 @@ package com.example.smartteachingplatform.mastery.mapper;
 import com.example.smartteachingplatform.mastery.dto.MasteryHistoryItemResponse;
 import com.example.smartteachingplatform.mastery.dto.MasteryItemResponse;
 import com.example.smartteachingplatform.mastery.dto.NodeSummaryResponse;
+import com.example.smartteachingplatform.quiz.entity.KnowledgeMastery;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -65,4 +67,20 @@ public interface MasteryMapper {
     long countHistory(@Param("courseId") Long courseId,
                       @Param("studentId") Long studentId,
                       @Param("nodeId") Long nodeId);
+
+    @Select("SELECT * FROM knowledge_mastery WHERE course_id = #{courseId} AND student_id = #{studentId} AND knowledge_node_id = #{nodeId}")
+    KnowledgeMastery findMastery(@Param("courseId") Long courseId, @Param("studentId") Long studentId, @Param("nodeId") Long nodeId);
+
+    @Insert("INSERT INTO knowledge_mastery (course_id, student_id, knowledge_node_id, mastery_score, mastery_level, updated_at) " +
+            "VALUES (#{courseId}, #{studentId}, #{knowledgeNodeId}, #{masteryScore}, #{masteryLevel}, NOW()) " +
+            "ON CONFLICT (course_id, student_id, knowledge_node_id) DO UPDATE SET " +
+            "mastery_score = EXCLUDED.mastery_score, mastery_level = EXCLUDED.mastery_level, updated_at = NOW()")
+    int upsertMasteryScore(KnowledgeMastery mastery);
+
+    @Insert("INSERT INTO mastery_history (mastery_id, course_id, student_id, knowledge_node_id, old_score, new_score, change_reason, created_at) " +
+            "VALUES (#{masteryId}, #{courseId}, #{studentId}, #{knowledgeNodeId}, #{oldScore}, #{newScore}, #{changeReason}, NOW())")
+    int insertMasteryHistory(@Param("masteryId") Long masteryId, @Param("courseId") Long courseId,
+                             @Param("studentId") Long studentId, @Param("knowledgeNodeId") Long nodeId,
+                             @Param("oldScore") BigDecimal oldScore, @Param("newScore") BigDecimal newScore,
+                             @Param("changeReason") String changeReason);
 }

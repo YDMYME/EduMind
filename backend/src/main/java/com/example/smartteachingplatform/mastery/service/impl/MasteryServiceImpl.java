@@ -6,14 +6,20 @@ import com.example.smartteachingplatform.course.mapper.CourseMapper;
 import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
 import com.example.smartteachingplatform.graph.entity.KnowledgeNode;
 import com.example.smartteachingplatform.graph.mapper.KnowledgeNodeMapper;
+import com.example.smartteachingplatform.mastery.dto.AdjustRequest;
+import com.example.smartteachingplatform.mastery.dto.AdjustResponse;
 import com.example.smartteachingplatform.mastery.dto.MasteryHistoryItemResponse;
 import com.example.smartteachingplatform.mastery.dto.MasteryItemResponse;
 import com.example.smartteachingplatform.mastery.dto.NodeSummaryResponse;
 import com.example.smartteachingplatform.mastery.mapper.MasteryMapper;
 import com.example.smartteachingplatform.mastery.service.MasteryService;
+import com.example.smartteachingplatform.quiz.entity.KnowledgeMastery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -125,5 +131,58 @@ public class MasteryServiceImpl implements MasteryService {
         data.put("page", page);
         data.put("pageSize", pageSize);
         return data;
+    }
+
+    @Override
+    @Transactional
+    public AdjustResponse adjust(Long courseId, Long teacherId, AdjustRequest request) {
+        Long ownerId = courseMapper.findTeacherIdByCourseId(courseId);
+        if (ownerId == null || !ownerId.equals(teacherId)) {
+            throw new BusinessException(403, "无权限操作该课程");
+        }
+        KnowledgeNode node = knowledgeNodeMapper.findById(request.getNodeId());
+        if (node == null || !courseId.equals(node.getCourseId())) {
+            throw new BusinessException(404, "知识点不存在");
+        }
+        CourseMember student = courseMemberMapper.findByCourseIdAndUserId(courseId, request.getStudentId());
+        if (student == null) {
+            throw new BusinessException(404, "学生不在该课程中");
+        }
+
+        BigDecimal newScore = request.getNewScore();
+        if (newScore == null || newScore.compareTo(BigDecimal.ZERO) < 0
+                || newScore.compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new BusinessException(400, "分数必须在 0-100 之间");
+        }
+
+        KnowledgeMastery old = masteryMapper.findMastery(courseId, request.getStudentId(), request.getNodeId());
+        BigDecimal oldScore = old != null ? old.getMasteryScore() : BigDecimal.ZERO;
+
+        KnowledgeMastery mastery = new KnowledgeMastery();
+        mastery.setCourseId(courseId);
+        mastery.setStudentId(request.getStudentId());
+        mastery.setKnowledgeNodeId(request.getNodeId());
+        mastery.setMasteryScore(newScore);
+        mastery.setMasteryLevel(calcLevel(newScore));
+        masteryMapper.upsertMasteryScore(mastery);
+
+        KnowledgeMastery updated = masteryMapper.findMastery(courseId, request.getStudentId(), request.getNodeId());
+        masteryMapper.insertMasteryHistory(updated.getId(), courseId, request.getStudentId(),
+                request.getNodeId(), oldScore, newScore, "teacher_adjustment");
+
+        AdjustResponse resp = new AdjustResponse();
+        resp.setMasteryId(updated.getId());
+        resp.setNodeId(request.getNodeId());
+        resp.setNewScore(newScore);
+        resp.setUpdatedAt(LocalDateTime.now());
+        return resp;
+    }
+
+    private String calcLevel(BigDecimal score) {
+        int s = score.intValue();
+        if (s == 0) return "gray";
+        if (s < 60) return "red";
+        if (s < 80) return "yellow";
+        return "green";
     }
 }
