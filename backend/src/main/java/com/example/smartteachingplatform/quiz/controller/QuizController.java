@@ -1,6 +1,7 @@
 package com.example.smartteachingplatform.quiz.controller;
 
 import com.example.smartteachingplatform.common.response.Result;
+import com.example.smartteachingplatform.common.util.SecurityUtils;
 import com.example.smartteachingplatform.quiz.dto.*;
 import com.example.smartteachingplatform.quiz.service.QuizService;
 import jakarta.validation.Valid;
@@ -73,6 +74,14 @@ public class QuizController {
             log.error("提交测验失败: quizId={}, {}", quizId, e.getMessage());
             return Result.error("提交失败: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/api/courses/{courseId}/quizzes")
+    @PreAuthorize("hasAnyRole('TEACHER','STUDENT')")
+    public Result<Map<String, Object>> listQuizzes(@PathVariable Long courseId,
+                                                   @RequestParam(defaultValue = "1") int page,
+                                                   @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(quizService.listQuizzes(courseId, SecurityUtils.getUserId(), page, pageSize));
     }
 
     private Long getCurrentUserId() {

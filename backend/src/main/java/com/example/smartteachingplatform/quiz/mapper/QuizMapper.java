@@ -1,5 +1,6 @@
 package com.example.smartteachingplatform.quiz.mapper;
 
+import com.example.smartteachingplatform.quiz.dto.QuizListItemResponse;
 import com.example.smartteachingplatform.quiz.entity.Quiz;
 import org.apache.ibatis.annotations.*;
 
@@ -31,4 +32,12 @@ public interface QuizMapper {
     /** 查测验下一道题的分数 */
     @Select("SELECT score FROM quiz_questions WHERE quiz_id = #{quizId} AND question_id = #{questionId}")
     java.math.BigDecimal findQuestionScore(@Param("quizId") Long quizId, @Param("questionId") Long questionId);
+
+    List<QuizListItemResponse> findPageByCourseId(@Param("courseId") Long courseId,
+                                                  @Param("studentOnly") boolean studentOnly,
+                                                  @Param("limit") int limit,
+                                                  @Param("offset") int offset);
+
+    long countByCourseId(@Param("courseId") Long courseId,
+                         @Param("studentOnly") boolean studentOnly);
 }

@@ -2,6 +2,8 @@ package com.example.smartteachingplatform.quiz.service;
 
 import com.example.smartteachingplatform.quiz.dto.*;
 
+import java.util.Map;
+
 public interface QuizService {
 
     /** 创建题目 */
@@ -15,4 +17,6 @@ public interface QuizService {
 
     /** 提交测验 */
     SubmitResultResponse submitQuiz(Long quizId, Long studentId, SubmitRequest request);
+
+    Map<String, Object> listQuizzes(Long courseId, Long userId, int page, int pageSize);
 }

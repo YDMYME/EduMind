@@ -2,6 +2,10 @@ package com.example.smartteachingplatform.quiz.service.impl;
 
 import com.example.smartteachingplatform.agent.dto.TriggerReminderRequest;
 import com.example.smartteachingplatform.agent.service.AgentService;
+import com.example.smartteachingplatform.common.exception.BusinessException;
+import com.example.smartteachingplatform.course.entity.CourseMember;
+import com.example.smartteachingplatform.course.mapper.CourseMapper;
+import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
 import com.example.smartteachingplatform.graph.entity.KnowledgeNode;
 import com.example.smartteachingplatform.graph.mapper.KnowledgeNodeMapper;
 import com.example.smartteachingplatform.quiz.dto.*;
@@ -30,6 +34,8 @@ public class QuizServiceImpl implements QuizService {
     private final SubmissionMapper submissionMapper;
     private final KnowledgeNodeMapper knowledgeNodeMapper;
     private final AgentService agentService;
+    private final CourseMapper courseMapper;
+    private final CourseMemberMapper courseMemberMapper;
 
     // ────────── 创建题目 ──────────
 
@@ -262,6 +268,31 @@ public class QuizServiceImpl implements QuizService {
 
         log.info("测验提交成功: submissionId={}, score={}/{}", submission.getId(), totalEarned, quiz.getTotalScore());
         return resp;
+    }
+
+    @Override
+    public Map<String, Object> listQuizzes(Long courseId, Long userId, int page, int pageSize) {
+        Long teacherId = courseMapper.findTeacherIdByCourseId(courseId);
+        boolean isTeacher = userId.equals(teacherId);
+        if (!isTeacher) {
+            CourseMember member = courseMemberMapper.findByCourseIdAndUserId(courseId, userId);
+            if (member == null) {
+                throw new BusinessException(403, "无权限访问该课程");
+            }
+        }
+        boolean studentOnly = !isTeacher;
+        int size = Math.max(1, pageSize);
+        int offset = (Math.max(1, page) - 1) * size;
+        List<QuizListItemResponse> items =
+                quizMapper.findPageByCourseId(courseId, studentOnly, size, offset);
+        long total = quizMapper.countByCourseId(courseId, studentOnly);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("items", items);
+        data.put("total", total);
+        data.put("page", page);
+        data.put("pageSize", pageSize);
+        return data;
     }
 
     // ────────── 评分逻辑 ──────────
