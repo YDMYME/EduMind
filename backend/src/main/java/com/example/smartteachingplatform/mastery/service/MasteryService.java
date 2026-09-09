@@ -11,4 +11,7 @@ public interface MasteryService {
     Map<String, Object> getStudentMastery(Long courseId, Long studentId, Long teacherId);
 
     NodeSummaryResponse getNodeSummary(Long courseId, Long nodeId, Long teacherId);
+
+    Map<String, Object> getHistory(Long courseId, Long studentId, Long nodeId,
+                                   int page, int pageSize, Long userId);
 }

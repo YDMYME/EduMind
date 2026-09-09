@@ -1,5 +1,6 @@
 package com.example.smartteachingplatform.mastery.mapper;
 
+import com.example.smartteachingplatform.mastery.dto.MasteryHistoryItemResponse;
 import com.example.smartteachingplatform.mastery.dto.MasteryItemResponse;
 import com.example.smartteachingplatform.mastery.dto.NodeSummaryResponse;
 import org.apache.ibatis.annotations.Mapper;
@@ -54,4 +55,14 @@ public interface MasteryMapper {
             "ORDER BY COALESCE(km.mastery_score, 0) ASC")
     List<NodeSummaryResponse.AtRiskStudent> atRiskStudents(@Param("courseId") Long courseId,
                                                            @Param("nodeId") Long nodeId);
+
+    List<MasteryHistoryItemResponse> findHistoryPage(@Param("courseId") Long courseId,
+                                                     @Param("studentId") Long studentId,
+                                                     @Param("nodeId") Long nodeId,
+                                                     @Param("limit") int limit,
+                                                     @Param("offset") int offset);
+
+    long countHistory(@Param("courseId") Long courseId,
+                      @Param("studentId") Long studentId,
+                      @Param("nodeId") Long nodeId);
 }

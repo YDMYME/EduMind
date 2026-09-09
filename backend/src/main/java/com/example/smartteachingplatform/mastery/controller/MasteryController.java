@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -36,5 +37,16 @@ public class MasteryController {
     public Result<NodeSummaryResponse> getNodeSummary(@PathVariable Long courseId,
                                                       @PathVariable Long nodeId) {
         return Result.success(masteryService.getNodeSummary(courseId, nodeId, SecurityUtils.getUserId()));
+    }
+
+    @GetMapping("/api/courses/{courseId}/mastery/history")
+    @PreAuthorize("hasAnyRole('TEACHER','STUDENT')")
+    public Result<Map<String, Object>> getHistory(@PathVariable Long courseId,
+                                                  @RequestParam Long studentId,
+                                                  @RequestParam(required = false) Long nodeId,
+                                                  @RequestParam(defaultValue = "1") int page,
+                                                  @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(masteryService.getHistory(courseId, studentId, nodeId, page, pageSize,
+                SecurityUtils.getUserId()));
     }
 }

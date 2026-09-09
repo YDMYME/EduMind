@@ -6,6 +6,7 @@ import com.example.smartteachingplatform.course.mapper.CourseMapper;
 import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
 import com.example.smartteachingplatform.graph.entity.KnowledgeNode;
 import com.example.smartteachingplatform.graph.mapper.KnowledgeNodeMapper;
+import com.example.smartteachingplatform.mastery.dto.MasteryHistoryItemResponse;
 import com.example.smartteachingplatform.mastery.dto.MasteryItemResponse;
 import com.example.smartteachingplatform.mastery.dto.NodeSummaryResponse;
 import com.example.smartteachingplatform.mastery.mapper.MasteryMapper;
@@ -90,5 +91,39 @@ public class MasteryServiceImpl implements MasteryService {
         }
         resp.setDistribution(dist);
         return resp;
+    }
+
+    @Override
+    public Map<String, Object> getHistory(Long courseId, Long studentId, Long nodeId,
+                                          int page, int pageSize, Long userId) {
+        Long teacherId = courseMapper.findTeacherIdByCourseId(courseId);
+        boolean isTeacher = userId.equals(teacherId);
+        if (!isTeacher) {
+            if (!userId.equals(studentId)) {
+                throw new BusinessException(403, "只能查询本人的掌握度历史");
+            }
+            CourseMember member = courseMemberMapper.findByCourseIdAndUserId(courseId, userId);
+            if (member == null) {
+                throw new BusinessException(403, "未加入该课程");
+            }
+        } else {
+            CourseMember student = courseMemberMapper.findByCourseIdAndUserId(courseId, studentId);
+            if (student == null) {
+                throw new BusinessException(404, "学生不在该课程中");
+            }
+        }
+
+        int size = Math.max(1, pageSize);
+        int offset = (Math.max(1, page) - 1) * size;
+        List<MasteryHistoryItemResponse> items =
+                masteryMapper.findHistoryPage(courseId, studentId, nodeId, size, offset);
+        long total = masteryMapper.countHistory(courseId, studentId, nodeId);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("items", items);
+        data.put("total", total);
+        data.put("page", page);
+        data.put("pageSize", pageSize);
+        return data;
     }
 }
