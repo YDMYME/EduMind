@@ -24,7 +24,8 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
-
+import org.springframework.dao.DuplicateKeyException;
+import java.time.LocalDateTime;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -228,17 +229,41 @@ public class QuizServiceImpl implements QuizService {
     @Override
     @Transactional
     public SubmitResultResponse submitQuiz(Long quizId, Long studentId, SubmitRequest request) {
-        Quiz quiz = quizMapper.findById(quizId);
-        if (quiz == null) throw new RuntimeException("测验不存在");
+        LocalDateTime now = LocalDateTime.now();
 
+        // ── 前置校验 ──
+        Quiz quiz = quizMapper.findById(quizId);
+        if (quiz == null) {
+            throw new BusinessException(404, "测验不存在");
+        }
+        CourseMember member = courseMemberMapper.findByCourseIdAndUserId(quiz.getCourseId(), studentId);
+        if (member == null) {
+            throw new BusinessException(403, "未加入该课程");
+        }
+        if (!"published".equals(quiz.getStatus())) {
+            throw new BusinessException(409, "测验未发布");
+        }
+        if (quiz.getStartTime() != null && quiz.getStartTime().isAfter(now)) {
+            throw new BusinessException(409, "未到开始时间");
+        }
+        if (quiz.getEndTime() != null && quiz.getEndTime().isBefore(now)) {
+            throw new BusinessException(409, "已过结束时间");
+        }
+
+        int submittedCount = submissionMapper.getMaxAttemptNo(quizId, studentId);
+        if (quiz.getAttemptLimit() != null && submittedCount >= quiz.getAttemptLimit()) {
+            throw new BusinessException(409, "超出提交次数");
+        }
+        int attemptNo = submittedCount + 1;
+
+        // ── 逐题评分 ──
         Map<String, String> studentAnswers = request.getAnswers();
         List<Long> questionIds = quizMapper.findQuestionIdsByQuizId(quizId);
 
-        // 1. 逐题评分
         BigDecimal totalEarned = BigDecimal.ZERO;
         List<QuizAnswer> answers = new ArrayList<>();
-        Map<Long, BigDecimal> nodeScores = new HashMap<>();     // nodeId → 总得分
-        Map<Long, BigDecimal> nodeMaxScores = new HashMap<>();  // nodeId → 满分
+        Map<Long, BigDecimal> nodeScores = new HashMap<>();
+        Map<Long, BigDecimal> nodeMaxScores = new HashMap<>();
 
         for (Long qid : questionIds) {
             Question q = questionMapper.findById(qid);
@@ -248,7 +273,6 @@ public class QuizServiceImpl implements QuizService {
             if (questionScore == null) questionScore = BigDecimal.ZERO;
 
             String studentAnswer = studentAnswers.getOrDefault(String.valueOf(qid), "");
-
             GradingResult grad = gradeQuestion(q, studentAnswer, questionScore);
             totalEarned = totalEarned.add(grad.earnedScore);
 
@@ -259,18 +283,16 @@ public class QuizServiceImpl implements QuizService {
             ans.setScore(grad.earnedScore);
             answers.add(ans);
 
-            // 按知识点累计
             if (q.getKnowledgeNodeId() != null) {
                 nodeScores.merge(q.getKnowledgeNodeId(), grad.earnedScore, BigDecimal::add);
                 nodeMaxScores.merge(q.getKnowledgeNodeId(), questionScore, BigDecimal::add);
             }
         }
 
-        // 2. 插入提交记录
-        int attemptNo = submissionMapper.getMaxAttemptNo(quizId, studentId) + 1;
+        // ── 插入提交记录（并发兜底）──
         BigDecimal correctRate = quiz.getTotalScore().compareTo(BigDecimal.ZERO) > 0
                 ? totalEarned.divide(quiz.getTotalScore(), 4, RoundingMode.HALF_UP)
-                        .multiply(BigDecimal.valueOf(100))
+                .multiply(BigDecimal.valueOf(100))
                 : BigDecimal.ZERO;
 
         QuizSubmission submission = new QuizSubmission();
@@ -280,15 +302,19 @@ public class QuizServiceImpl implements QuizService {
         submission.setTotalScore(totalEarned);
         submission.setCorrectRate(correctRate);
         submission.setStatus("submitted");
-        submissionMapper.insertSubmission(submission);
+        try {
+            submissionMapper.insertSubmission(submission);
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException(409, "提交冲突，请重试");
+        }
 
-        // 3. 插入答案
+        // ── 插入答案 ──
         for (QuizAnswer ans : answers) {
             ans.setSubmissionId(submission.getId());
             submissionMapper.insertAnswer(ans);
         }
 
-        // 4. 更新掌握度
+        // ── 更新掌握度（0.6/0.4 加权）──
         List<SubmitResultResponse.MasteryUpdate> masteryUpdates = new ArrayList<>();
         boolean triggerReminder = false;
 
@@ -303,11 +329,9 @@ public class QuizServiceImpl implements QuizService {
             KnowledgeMastery oldMastery = submissionMapper.findMastery(quiz.getCourseId(), studentId, nodeId);
             BigDecimal oldScore = oldMastery != null ? oldMastery.getMasteryScore() : BigDecimal.ZERO;
 
-            // 新分 × 0.6 + 旧分 × 0.4
             BigDecimal newScore = nodeRate.multiply(BigDecimal.valueOf(0.6))
                     .add(oldScore.multiply(BigDecimal.valueOf(0.4)))
                     .setScale(2, RoundingMode.HALF_UP);
-
             if (newScore.compareTo(BigDecimal.valueOf(100)) > 0) newScore = BigDecimal.valueOf(100);
 
             KnowledgeMastery mastery = new KnowledgeMastery();
@@ -319,19 +343,16 @@ public class QuizServiceImpl implements QuizService {
             mastery.setLastQuizScore(nodeRate);
             submissionMapper.upsertMastery(mastery);
 
-            // 写入历史
             Long masteryId = submissionMapper.findMastery(quiz.getCourseId(), studentId, nodeId).getId();
             submissionMapper.insertMasteryHistory(masteryId, quiz.getCourseId(), studentId, nodeId,
                     oldScore, newScore, "quiz_submit");
 
-            // 写入学习日志
             submissionMapper.insertLearningLog(quiz.getCourseId(), studentId, nodeId, submission.getId());
 
             KnowledgeNode node = knowledgeNodeMapper.findById(nodeId);
             BigDecimal delta = newScore.subtract(oldScore);
             masteryUpdates.add(buildMasteryUpdate(nodeId, node, oldScore, newScore, delta));
 
-            // delta ≤ -15 → 触发提醒
             if (delta.compareTo(BigDecimal.valueOf(-15)) <= 0) {
                 triggerReminder = true;
                 TriggerReminderRequest trigger = new TriggerReminderRequest();
@@ -352,8 +373,6 @@ public class QuizServiceImpl implements QuizService {
         resp.setTotalScore(quiz.getTotalScore());
         resp.setMasteryUpdates(masteryUpdates);
         resp.setTriggerReminder(triggerReminder);
-
-        log.info("测验提交成功: submissionId={}, score={}/{}", submission.getId(), totalEarned, quiz.getTotalScore());
         return resp;
     }
 

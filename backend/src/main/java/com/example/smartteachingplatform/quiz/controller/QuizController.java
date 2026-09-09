@@ -81,17 +81,11 @@ public class QuizController {
     }
 
     /** 提交测验 — STUDENT */
-    @PostMapping("/api/quizzes/{quizId}/submit")
+    @PostMapping({"/api/quizzes/{quizId}/attempts", "/api/quizzes/{quizId}/submit"})
     @PreAuthorize("hasRole('STUDENT')")
     public Result<SubmitResultResponse> submitQuiz(@PathVariable Long quizId,
-                                                    @Valid @RequestBody SubmitRequest request) {
-        try {
-            Long studentId = getCurrentUserId();
-            return Result.success(quizService.submitQuiz(quizId, studentId, request));
-        } catch (Exception e) {
-            log.error("提交测验失败: quizId={}, {}", quizId, e.getMessage());
-            return Result.error("提交失败: " + e.getMessage());
-        }
+                                                   @Valid @RequestBody SubmitRequest request) {
+        return Result.success(quizService.submitQuiz(quizId, SecurityUtils.getUserId(), request));
     }
 
     @GetMapping("/api/courses/{courseId}/quizzes")
