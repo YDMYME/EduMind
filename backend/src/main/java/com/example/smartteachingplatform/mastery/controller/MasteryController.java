@@ -2,6 +2,7 @@ package com.example.smartteachingplatform.mastery.controller;
 
 import com.example.smartteachingplatform.common.response.Result;
 import com.example.smartteachingplatform.common.util.SecurityUtils;
+import com.example.smartteachingplatform.mastery.dto.NodeSummaryResponse;
 import com.example.smartteachingplatform.mastery.service.MasteryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,5 +29,12 @@ public class MasteryController {
     public Result<Map<String, Object>> getStudentMastery(@PathVariable Long courseId,
                                                          @PathVariable Long studentId) {
         return Result.success(masteryService.getStudentMastery(courseId, studentId, SecurityUtils.getUserId()));
+    }
+
+    @GetMapping("/api/courses/{courseId}/mastery/nodes/{nodeId}/summary")
+    @PreAuthorize("hasRole('TEACHER')")
+    public Result<NodeSummaryResponse> getNodeSummary(@PathVariable Long courseId,
+                                                      @PathVariable Long nodeId) {
+        return Result.success(masteryService.getNodeSummary(courseId, nodeId, SecurityUtils.getUserId()));
     }
 }

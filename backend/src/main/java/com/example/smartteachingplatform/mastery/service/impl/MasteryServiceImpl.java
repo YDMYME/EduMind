@@ -4,7 +4,10 @@ import com.example.smartteachingplatform.common.exception.BusinessException;
 import com.example.smartteachingplatform.course.entity.CourseMember;
 import com.example.smartteachingplatform.course.mapper.CourseMapper;
 import com.example.smartteachingplatform.course.mapper.CourseMemberMapper;
+import com.example.smartteachingplatform.graph.entity.KnowledgeNode;
+import com.example.smartteachingplatform.graph.mapper.KnowledgeNodeMapper;
 import com.example.smartteachingplatform.mastery.dto.MasteryItemResponse;
+import com.example.smartteachingplatform.mastery.dto.NodeSummaryResponse;
 import com.example.smartteachingplatform.mastery.mapper.MasteryMapper;
 import com.example.smartteachingplatform.mastery.service.MasteryService;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +24,7 @@ public class MasteryServiceImpl implements MasteryService {
     private final MasteryMapper masteryMapper;
     private final CourseMemberMapper courseMemberMapper;
     private final CourseMapper courseMapper;
+    private final KnowledgeNodeMapper knowledgeNodeMapper;
 
     @Override
     public Map<String, Object> getMyMastery(Long courseId, Long studentId) {
@@ -54,5 +58,37 @@ public class MasteryServiceImpl implements MasteryService {
         data.put("items", items);
         data.put("total", items.size());
         return data;
+    }
+
+    @Override
+    public NodeSummaryResponse getNodeSummary(Long courseId, Long nodeId, Long teacherId) {
+        Long ownerId = courseMapper.findTeacherIdByCourseId(courseId);
+        if (ownerId == null || !ownerId.equals(teacherId)) {
+            throw new BusinessException(403, "无权限操作该课程");
+        }
+        KnowledgeNode node = knowledgeNodeMapper.findById(nodeId);
+        if (node == null || !courseId.equals(node.getCourseId())) {
+            throw new BusinessException(404, "知识点不存在");
+        }
+
+        NodeSummaryResponse resp = new NodeSummaryResponse();
+        resp.setNodeId(node.getId());
+        resp.setNodeName(node.getNodeName());
+        resp.setStudentCount(masteryMapper.countStudentsByCourse(courseId));
+        resp.setAverageScore(masteryMapper.avgMasteryScore(courseId, nodeId));
+        resp.setAtRiskStudents(masteryMapper.atRiskStudents(courseId, nodeId));
+
+        Map<String, Integer> dist = new LinkedHashMap<>();
+        dist.put("GRAY", 0);
+        dist.put("RED", 0);
+        dist.put("YELLOW", 0);
+        dist.put("GREEN", 0);
+        for (Map<String, Object> row : masteryMapper.distribution(courseId, nodeId)) {
+            String level = ((String) row.get("level")).toUpperCase();
+            int cnt = ((Number) row.get("cnt")).intValue();
+            dist.put(level, cnt);
+        }
+        resp.setDistribution(dist);
+        return resp;
     }
 }
