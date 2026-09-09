@@ -1,4 +1,8 @@
 package com.example.smartteachingplatform.mastery.service;
+
+import java.util.Map;
+
 public interface MasteryService {
-    // TODO: calculate, query, recalc
+
+    Map<String, Object> getMyMastery(Long courseId, Long studentId);
 }
